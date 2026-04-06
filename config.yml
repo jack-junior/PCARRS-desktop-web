@@ -1,34 +1,11 @@
-# ==========================================
-# GeneActiv Analysis Suite - Global Config
-# ==========================================
-
-project:
-  name: "PCARRS"
-  version: "1.0.0"
-
-# User-defined paths (Selected via the UI "Browse" buttons)
 paths:
-  raw_bin: "C:/Your/Path/To/BIN"
-  sleep_reports: "C:/Your/Path/To/Sleep_Reports"
-  participant_folder: "C:/Your/Path/To/Participants_CSVs"
-  
-  # Automated paths (Managed by the System Update)
-  ggir_output: "GGIR"
-  summaries: "summaries"
-  img_folder: "resources/images"
-  
-  # Auto-mapped Participant Files (Logic inside app.R)
+  raw_bin: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/BIN
+  sleep_data: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/Software_sleep_reports
+  participant_folder: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info
   participant_files:
-    en: "participants_en.csv"
-    ta: "participants_ta.csv"
-    hi: "participants_hi.csv"
-
-# Processing parameters
-analysis:
-  language: "en" # Updated by the "Select Language" dropdown
-  device_type: "geneactiv"
-  save_plots: true
-
-# Environment
-env:
-  python_interpreter: "resources/Python_Env/bin/python"
+    en: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info/participants_en.csv
+    ta: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info/participants_ta.csv
+    hi: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info/participants_hi.csv
+  img_folder: resources/images
+  summaries: summaries
+  ggir_output: GGIR

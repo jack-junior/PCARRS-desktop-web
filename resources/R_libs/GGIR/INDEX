@@ -1,0 +1,81 @@
+ABI                     Activity balance index (ABI)
+DFA                     Detrended Fluctuation Analysis
+GGIR                    Shell function for analysing an accelerometer
+                        dataset.
+GGIR-package            A package to process multi-day raw
+                        accelerometer data
+POSIXtime2iso8601       Convert POSIX to iso8601 timestamp
+SSP                     Estimated self-similarity parameter
+apply_cosinor_IS_IV_Analyses
+                        Apply Cosinor Analyses to time series
+create_test_acc_csv     Creates csv data file for testing purposes
+create_test_sleeplog_csv
+                        Creates csv sleeplog file for testing purposes
+data.calibrate          Example output from g.calibrate
+data.getmeta            Example output from g.getmeta
+data.inspectfile        Example output from g.inspectfile
+data.metalong           Metalong object as part of part 1 milestone
+                        data
+data.ts                 Time series data.frame stored by part 5
+g.calibrate             function to estimate calibration error and make
+                        recommendation for addressing it
+g.getbout               function to calculate bouts from vector of
+                        binary classes
+g.getmeta               Function to extract meta-data (features) from
+                        data in accelerometer file
+g.imputeTimegaps        Impute gaps in three axis raw accelerometer
+                        data
+g.inspectfile           function to inspect accelerometer file for
+                        brand, sample frequency and header
+g.loadlog               Load and clean sleeplog information
+g.part1                 function to load and pre-process acceleration
+                        files
+g.part2                 function to analyse and summarize pre-processed
+                        output from g.part1
+g.part3                 Detection of sustained inactivity periods as
+                        needed for sleep detection in g.part4.
+g.part4                 Labels detected sustained inactivity periods by
+                        g.part3 as either part of the Sleep Period Time
+                        window or not
+g.part5                 Merge output from physical activity and sleep
+                        analysis into one report
+g.part6                 Perform temporal pattern analyses
+g.plot5                 Generate user-friendly visual report. The first
+                        part of the report summarizes important daily
+                        metrics in bar plot format.  The second part of
+                        the report shows the raw data and annotations
+                        in 24-hr periods. Angle-z is shown with sleep
+                        annotations during the SPT (sleep period time)
+                        window.  ENMO is shown with daytime inactivity
+                        and PA (physical activity) annotations in the
+                        lower section of each 24-hr plot. The PA
+                        annotations are based on a 10 minute bout
+                        metric and 80 of a 10 minute bout of MVPA.
+                        Vigorous PA is a short window of time above
+                        threshold.vig that is part of a bout of MVPA.
+                        Light PA is a short window of time above
+                        threshold.lig that is part of a bout of light
+                        PA.
+g.report.part2          Generate report from milestone data produced by
+                        g.part2
+g.report.part4          Generate report from milestone data produced by
+                        g.part4
+g.report.part5          Generate report from milestone data produced by
+                        g.part5
+g.report.part5_dictionary
+                        Generate data dictionary for reports from
+                        milestone data produced by g.part5
+g.report.part6          Generate report from milestone data produced by
+                        g.part6
+g.shell.GGIR            Wrapper function around function GGIR
+inspect_binFile_brand   Identify the Device Brand from a Binary File
+is.ISO8601              Check whether character timestamp is in iso8601
+                        format.
+iso8601chartime2POSIX   Convert iso8601 timestamps to POSIX timestamp
+load_params             Load default parameters
+part6AlignIndividuals   part6AlignIndividuals
+part6PairwiseAggregation
+                        part6PairwiseAggregation
+read.myacc.csv          Read custom csv files with accelerometer data
+visualReport            Generate visualisation of time series produced
+                        by part 5.

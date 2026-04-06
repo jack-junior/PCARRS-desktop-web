@@ -1,0 +1,16 @@
+ActCosinor              Cosinor Model for Circadian Rhythmicity
+ActCosinor_long         Cosinor Model for Circadian Rhythmicity for the
+                        Whole Dataset
+ActExtendCosinor        Extended Cosinor Model for Circadian
+                        Rhythmicity
+ActExtendCosinor_long   Cosinor Model for Circadian Rhythmicity for the
+                        Whole Dataset
+IS                      Interdaily Statbility
+IS_long                 Interdaily Statbility for the Whole Dataset
+IV                      Intradaily Variability
+IV_long                 Intradaily Variability for the Whole Dataset
+RA                      Relative Amplitude
+RA_long                 Relative Amplitude for the Whole Datset
+bin_data                Bin data into longer windows
+example_activity_data   Activity/Wear Data from 50 Subjects from NHANES
+                        2003 - 2006

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head><title>R: Raw Accelerometer Data Analysis</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<link rel="stylesheet" type="text/css" href="R.css">
+</head><body><div class="container">
+<h1> Raw Accelerometer Data Analysis
+<img class="toplogo" src="../../../doc/html/Rlogo.svg" alt="[R logo]">
+</h1>
+<hr>
+<div style="text-align: center;">
+<a href="../../../doc/html/packages.html"><img class="arrow" src="../../../doc/html/left.jpg" alt="[Up]"></a>
+<a href="../../../doc/html/index.html"><img class="arrow" src="../../../doc/html/up.jpg" alt="[Top]"></a>
+</div><h2>Documentation for package &lsquo;GGIR&rsquo; version 3.3-4</h2>
+
+<ul><li><a href="../DESCRIPTION" type="text/plain">DESCRIPTION file</a>.</li>
+<li><a href="../doc/index.html">User guides, package vignettes and other documentation.</a></li>
+<li><a href="../NEWS.md">Package NEWS</a>.</li>
+</ul>
+
+<h2>Help Pages</h2>
+
+
+<table style="width: 100%;">
+<tr><td style="width: 25%;"><a href="GGIR-package.html">GGIR-package</a></td>
+<td>A package to process multi-day raw accelerometer data</td></tr>
+<tr><td style="width: 25%;"><a href="ABI.html">ABI</a></td>
+<td>Activity balance index (ABI)</td></tr>
+<tr><td style="width: 25%;"><a href="apply_cosinor_IS_IV_Analyses.html">apply_cosinor_IS_IV_Analyses</a></td>
+<td>Apply Cosinor Analyses to time series</td></tr>
+<tr><td style="width: 25%;"><a href="create_test_acc_csv.html">create_test_acc_csv</a></td>
+<td>Creates csv data file for testing purposes</td></tr>
+<tr><td style="width: 25%;"><a href="create_test_sleeplog_csv.html">create_test_sleeplog_csv</a></td>
+<td>Creates csv sleeplog file for testing purposes</td></tr>
+<tr><td style="width: 25%;"><a href="data.calibrate.html">data.calibrate</a></td>
+<td>Example output from g.calibrate</td></tr>
+<tr><td style="width: 25%;"><a href="data.getmeta.html">data.getmeta</a></td>
+<td>Example output from g.getmeta</td></tr>
+<tr><td style="width: 25%;"><a href="data.inspectfile.html">data.inspectfile</a></td>
+<td>Example output from g.inspectfile</td></tr>
+<tr><td style="width: 25%;"><a href="data.metalong.html">data.metalong</a></td>
+<td>Metalong object as part of part 1 milestone data</td></tr>
+<tr><td style="width: 25%;"><a href="data.ts.html">data.ts</a></td>
+<td>Time series data.frame stored by part 5</td></tr>
+<tr><td style="width: 25%;"><a href="DFA.html">DFA</a></td>
+<td>Detrended Fluctuation Analysis</td></tr>
+<tr><td style="width: 25%;"><a href="g.calibrate.html">g.calibrate</a></td>
+<td>function to estimate calibration error and make recommendation for addressing it</td></tr>
+<tr><td style="width: 25%;"><a href="g.getbout.html">g.getbout</a></td>
+<td>function to calculate bouts from vector of binary classes</td></tr>
+<tr><td style="width: 25%;"><a href="g.getmeta.html">g.getmeta</a></td>
+<td>Function to extract meta-data (features) from data in accelerometer file</td></tr>
+<tr><td style="width: 25%;"><a href="g.imputeTimegaps.html">g.imputeTimegaps</a></td>
+<td>Impute gaps in three axis raw accelerometer data</td></tr>
+<tr><td style="width: 25%;"><a href="g.inspectfile.html">g.inspectfile</a></td>
+<td>function to inspect accelerometer file for brand, sample frequency and header</td></tr>
+<tr><td style="width: 25%;"><a href="g.loadlog.html">g.loadlog</a></td>
+<td>Load and clean sleeplog information</td></tr>
+<tr><td style="width: 25%;"><a href="g.part1.html">g.part1</a></td>
+<td>function to load and pre-process acceleration files</td></tr>
+<tr><td style="width: 25%;"><a href="g.part2.html">g.part2</a></td>
+<td>function to analyse and summarize pre-processed output from g.part1</td></tr>
+<tr><td style="width: 25%;"><a href="g.part3.html">g.part3</a></td>
+<td>Detection of sustained inactivity periods as needed for sleep detection in g.part4.</td></tr>
+<tr><td style="width: 25%;"><a href="g.part4.html">g.part4</a></td>
+<td>Labels detected sustained inactivity periods by g.part3 as either part of the Sleep Period Time window or not</td></tr>
+<tr><td style="width: 25%;"><a href="g.part5.html">g.part5</a></td>
+<td>Merge output from physical activity and sleep analysis into one report</td></tr>
+<tr><td style="width: 25%;"><a href="g.part6.html">g.part6</a></td>
+<td>Perform temporal pattern analyses</td></tr>
+<tr><td style="width: 25%;"><a href="g.plot5.html">g.plot5</a></td>
+<td>Generate user-friendly visual report. The first part of the report summarizes important daily metrics in bar plot format.  The second part of the report shows the raw data and annotations in 24-hr periods. Angle-z is shown with sleep annotations during the SPT (sleep period time) window.  ENMO is shown with daytime inactivity and PA (physical activity) annotations in the lower section of each 24-hr plot. The PA annotations are based on a 10 minute bout metric and 80 of a 10 minute bout of MVPA. Vigorous PA is a short window of time above threshold.vig that is part of a bout of MVPA. Light PA is a short window of time above threshold.lig that is part of a bout of light PA.</td></tr>
+<tr><td style="width: 25%;"><a href="g.report.part2.html">g.report.part2</a></td>
+<td>Generate report from milestone data produced by g.part2</td></tr>
+<tr><td style="width: 25%;"><a href="g.report.part4.html">g.report.part4</a></td>
+<td>Generate report from milestone data produced by g.part4</td></tr>
+<tr><td style="width: 25%;"><a href="g.report.part5.html">g.report.part5</a></td>
+<td>Generate report from milestone data produced by g.part5</td></tr>
+<tr><td style="width: 25%;"><a href="g.report.part5_dictionary.html">g.report.part5_dictionary</a></td>
+<td>Generate data dictionary for reports from milestone data produced by g.part5</td></tr>
+<tr><td style="width: 25%;"><a href="g.report.part6.html">g.report.part6</a></td>
+<td>Generate report from milestone data produced by g.part6</td></tr>
+<tr><td style="width: 25%;"><a href="g.shell.GGIR.html">g.shell.GGIR</a></td>
+<td>Wrapper function around function GGIR</td></tr>
+<tr><td style="width: 25%;"><a href="GGIR.html">GGIR</a></td>
+<td>Shell function for analysing an accelerometer dataset.</td></tr>
+<tr><td style="width: 25%;"><a href="inspect_binFile_brand.html">inspect_binFile_brand</a></td>
+<td>Identify the Device Brand from a Binary File</td></tr>
+<tr><td style="width: 25%;"><a href="is.ISO8601.html">is.ISO8601</a></td>
+<td>Check whether character timestamp is in iso8601 format.</td></tr>
+<tr><td style="width: 25%;"><a href="iso8601chartime2POSIX.html">iso8601chartime2POSIX</a></td>
+<td>Convert iso8601 timestamps to POSIX timestamp</td></tr>
+<tr><td style="width: 25%;"><a href="load_params.html">load_params</a></td>
+<td>Load default parameters</td></tr>
+<tr><td style="width: 25%;"><a href="part6AlignIndividuals.html">part6AlignIndividuals</a></td>
+<td>part6AlignIndividuals</td></tr>
+<tr><td style="width: 25%;"><a href="part6PairwiseAggregation.html">part6PairwiseAggregation</a></td>
+<td>part6PairwiseAggregation</td></tr>
+<tr><td style="width: 25%;"><a href="POSIXtime2iso8601.html">POSIXtime2iso8601</a></td>
+<td>Convert POSIX to iso8601 timestamp</td></tr>
+<tr><td style="width: 25%;"><a href="read.myacc.csv.html">read.myacc.csv</a></td>
+<td>Read custom csv files with accelerometer data</td></tr>
+<tr><td style="width: 25%;"><a href="SSP.html">SSP</a></td>
+<td>Estimated self-similarity parameter</td></tr>
+<tr><td style="width: 25%;"><a href="visualReport.html">visualReport</a></td>
+<td>Generate visualisation of time series produced by part 5.</td></tr>
+</table>
+</div></body></html>
