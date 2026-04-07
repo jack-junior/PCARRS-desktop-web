@@ -7,3 +7,11 @@ R-Portable/
 ressources/
 
 reports/
+
+GENEActive_Suite_app
+GGIR/
+current_ggir_folder.txt
+pipeline_log.txt
+resources/R_libs/shinycssloaders/
+silent_update.R
+summaries/

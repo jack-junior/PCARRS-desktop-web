@@ -1,11 +1,11 @@
 paths:
-  raw_bin: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/BIN
-  sleep_data: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/Software_sleep_reports
-  participant_folder: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info
+  raw_bin: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/GENEActive_Suite/data/BIN
+  sleep_data: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/GENEActive_Suite/data/Software_sleep_reports
+  participant_folder: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/GENEActive_Suite/data/participant_info
   participant_files:
-    en: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info/participants_en.csv
-    ta: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info/participants_ta.csv
-    hi: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/p5-activity-summary/data/participant_info/participants_hi.csv
+    en: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/GENEActive_Suite/data/participant_info/participants_en.csv
+    ta: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/GENEActive_Suite/data/participant_info/participants_ta.csv
+    hi: C:/Users/GayiKomiSelassi/CEO_Jack/ccdc_work/GENEActiv/GENEActive_Suite/data/participant_info/participants_hi.csv
   img_folder: resources/images
   summaries: summaries
   ggir_output: GGIR

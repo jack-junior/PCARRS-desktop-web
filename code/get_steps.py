@@ -24,7 +24,7 @@ with open(config_path, "r", encoding="utf-8") as f:
 BIN_ROOT = Path(cfg['paths']['raw_bin'])
 OUTPUT_ROOT = project_root / cfg['paths']['summaries']
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-STEPCOUNT_EXE = "stepcount"
+STEPCOUNT_EXE = f'"{sys.executable}" -m stepcount.stepcount'
 
 # ------------------------------------
 # 3. SELECTIVE LOGIC (New)
@@ -68,12 +68,24 @@ def run_stepcount_on_file(bin_file: Path, output_root: Path):
     per_file_output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"--- Processing: {bin_file.name} ---")
-    cmd = [STEPCOUNT_EXE, str(bin_file), "-o", str(per_file_output_dir)]
     
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+    cmd = [
+        sys.executable, "-m", "stepcount.stepcount", 
+        str(bin_file), 
+        "-o", str(per_file_output_dir)
+    ]
+    
+    result = subprocess.run(
+        cmd, 
+        capture_output=True, 
+        text=True, 
+        encoding="utf-8", 
+        errors="ignore"
+    )
 
     if result.returncode != 0:
         print(f"RESULT: FAILED for {bin_file.name}")
+        print(f"ERROR: {result.stderr}") 
         return False
     
     print(f"RESULT: SUCCESS for {bin_file.name}")

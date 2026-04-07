@@ -24,45 +24,45 @@ if(!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
-# 3. SELECTIVE PROCESSING LOGIC (New)
-# These variables are passed from the Shiny Server global environment
-target_files <- NULL
-overwrite_mode <- FALSE
 
-if (exists("selected_ids_vector") && length(selected_ids_vector) > 0) {
-  message("Selective Mode Active. Target IDs: ", paste(selected_ids_vector, collapse=", "))
+# 3. SELECTIVE PROCESSING LOGIC (Unified)
+final_data_dir <- data_dir
+is_selective <- FALSE
+temp_subset_dir <- file.path(tempdir(), "ggir_subset") # Stockage du chemin pour nettoyage
+
+if (exists("selected_filenames") && !is.null(selected_filenames) && length(selected_filenames) > 0) {
+  message("--- Selective Mode Active ---")
   
-  # List all .bin files and filter by the IDs provided
-  all_bin_files <- list.files(data_dir, pattern = "\\.bin$", recursive = TRUE)
+  if(dir.exists(temp_subset_dir)) unlink(temp_subset_dir, recursive = TRUE)
+  dir.create(temp_subset_dir, recursive = TRUE)
   
-  # Match filenames containing the IDs
-  target_files <- all_bin_files[unique(unlist(lapply(selected_ids_vector, function(id) grep(id, all_bin_files))))]
+  files_to_copy <- file.path(data_dir, selected_filenames)
+  existing_files <- files_to_copy[file.exists(files_to_copy)]
   
-  if (length(target_files) == 0) {
-    stop("None of the specified IDs were found in the .bin folder.")
-  }
-  
-  # In selective mode, we usually want to overwrite to re-process errors
-  overwrite_mode <- TRUE
-  message("Files found for processing: ", length(target_files))
-}
+  if (length(existing_files) > 0) {
+    success_copy <- file.copy(existing_files, temp_subset_dir)
+    if(all(success_copy)) {
+      final_data_dir <- temp_subset_dir
+      is_selective <- TRUE
+      message(paste("Files successfully copied to temp folder:", length(existing_files), "files."))
+    }
+  } 
+} 
+
+writeLines(basename(final_data_dir), "current_ggir_folder.txt")
 
 message("--- Starting GGIR Analysis ---")
 
-# 4. RUN GGIR
+# --- 4. RUN GGIR (PARAMÈTRES ALIGNÉS SUR L'ORIGINEL) ---
 GGIR(
   mode = c(1, 2, 3, 4, 5),
-  datadir = data_dir,
+  datadir = final_data_dir, 
   outputdir = output_dir,
-  
-  # SELECTIVE FILTRATION
-  selectfiles = target_files, # NULL means process all
-  overwrite = overwrite_mode,  # TRUE if selective, FALSE if full (to skip existing)
-  
-  studyname = cfg$project$name, 
-  idloc = 6, 
+  overwrite = FALSE,           # CORRIGÉ : Aligné sur l'originel (évite les calculs redondants)
+  studyname = "CARRS Brain",   # CORRIGÉ : Nom exact du projet originel
+  idloc = 6,
   printsummary = TRUE, 
-  do.imp = FALSE, 
+  do.imp = FALSE,              # Confirmé : pas d'imputation
   epochvalues2csv = TRUE, 
   timewindow = c("WW"), 
   
@@ -96,12 +96,18 @@ GGIR(
   nonwearFilterWindow = c(20, 10),
   
   LUXthresholds = c(0, 1, 10, 100, 300, 1000),
-  LUX_day_segments = c(seq(0, 24, by = 1))
+  LUX_day_segments = seq(0, 24, by = 1)
 )
+
+# --- 5. NETTOYAGE (AJOUTÉ) ---
+if (is_selective && dir.exists(temp_subset_dir)) {
+  unlink(temp_subset_dir, recursive = TRUE)
+  message("--- Cleanup: Temporary selective folder removed ---")
+}
 
 message("==========================================")
 message("GGIR SUMMARY REPORT")
 message("Status: COMPLETED")
-message("Files Targeted: ", if(is.null(target_files)) "Full Folder" else length(target_files))
-message("Check folder: ", output_dir, "/output_", cfg$project$name)
+message("Mode: ", if(is_selective) "Selective (Subset)" else "Full Directory")
+message("Check folder: ", output_dir)
 message("==========================================")

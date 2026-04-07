@@ -30,13 +30,15 @@ process_one_stepcount_dir <- function(stepcount_dir) {
   
   message("Processing participant folder: ", participant_id)
   
+  
   # ---- find Daily file ----
   daily_file <- list.files(
     stepcount_dir,
     pattern = "Daily\\.csv\\.gz$",
     recursive = TRUE,
     full.names = TRUE
-  )
+  )  
+  
   
   if (length(daily_file) != 1L) {
     warning(
@@ -48,8 +50,9 @@ process_one_stepcount_dir <- function(stepcount_dir) {
   
   # ---- find Bouts file ----
   bouts_file <- list.files(
-    file.path(stepcount_dir, participant_id),
+    stepcount_dir,
     pattern = "Bouts\\.csv\\.gz$",
+    recursive = TRUE,
     full.names = TRUE
   )
   
