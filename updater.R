@@ -1,6 +1,6 @@
 library(httr)
 
-check_and_update <- function() {
+check_and_update <- function(update_roots = FALSE) {
   owner <- "jack-junior"
   repo  <- "PCARRS-desktop-web"
   
