@@ -715,6 +715,21 @@ server <- function(input, output, session) {
     })
   })
   
+  
+  # --- LOGIQUE DU BOUTON UPDATE AVEC BARRE DE PROGRESSION ---
+  observeEvent(input$btn_update, {
+    withProgress(message = 'Updating Analysis Scripts...', value = 0, {
+      success <- tryCatch({
+        # APPEL SPECIFIQUE : Code = TRUE, Roots = FALSE (ou TRUE selon ton choix)
+        check_and_update(update_roots = FALSE, update_code = TRUE, shiny_progress = setProgress)
+      }, error = function(e) {
+        FALSE
+      })
+      
+      if (success) showNotification("Scripts updated successfully!", type = "message")
+    })
+  })
+  
 } 
 
 shinyApp(ui, server)

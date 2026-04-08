@@ -31,18 +31,18 @@ tryCatch({
 })
 
 # E. SMART UPDATER LOGIC
+# Dans la section E de ton launch.R
 if (file.exists("updater.R")) {
-  message("--- Checking for updates (app.R, code/, etc.) ---")
+  message("--- Checking for Root Updates (app.R only) ---")
   tryCatch({
-    # We specify UTF-8 encoding to avoid the 'nul character' crash
-    source("updater.R", local = TRUE, encoding = "UTF-8")
+    tmp_script <- readLines("updater.R", warn = FALSE, skipNul = TRUE)
+    eval(parse(text = tmp_script))
     
-    # Run the smart update function
-    check_and_update(update_roots = TRUE) 
+    # APPEL SPECIFIQUE : Roots = TRUE, Code = FALSE
+    check_and_update(update_roots = TRUE, update_code = FALSE) 
+    
   }, error = function(e) {
-    # If update fails (e.g. no internet), we catch the error and continue
-    message(">>> Update system encountered an issue: ", e$message)
-    message(">>> Launching local version instead.")
+    message(">>> Update system skipped: ", e$message)
   })
 }
 

@@ -1,78 +1,56 @@
-# --- updater.R ---
 library(httr)
-library(digest)
 
-# Robust SHA1 calculation to avoid "nul character" errors
-git_sha1 <- function(filepath) {
-  if (!file.exists(filepath) || file.info(filepath)$size == 0) return("")
-  
-  sha <- tryCatch({
-    con <- file(filepath, "rb")
-    size <- file.info(filepath)$size
-    content <- readBin(con, "raw", n = size)
-    close(con)
-    
-    header <- charToRaw(paste0("blob ", size, "\0"))
-    digest(c(header, content), algo = "sha1", serialize = FALSE)
-  }, error = function(e) {
-    return("error_reading_file")
-  })
-  return(sha)
-}
-
-check_and_update <- function(update_roots = FALSE) {
+check_and_update <- function(update_roots = FALSE, update_code = TRUE, shiny_progress = NULL) {
   owner <- "jack-junior"
   repo  <- "PCARRS-desktop-web"
   
-  folders_map <- c("code" = "code")
-  root_files <- if(update_roots) c("app.R", "updater.R", "config.yml") else c()
-  
-  message("--- Checking GitHub for Updates ---")
-  update_performed <- FALSE
+  any_update_attempted <- FALSE
   had_errors <- FALSE
   
-  # A. Folders Update
-  for (i in seq_along(folders_map)) {
-    g_path <- names(folders_map)[i]
-    l_path <- folders_map[[i]]
-    
-    res <- GET(sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, g_path))
+  # --- PARTIE A : Dossier /code (Seulement si update_code est TRUE) ---
+  if (update_code) {
+    github_path <- "code"
+    local_path  <- "code"
+    url <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, github_path)
+    res <- GET(url)
     
     if (status_code(res) == 200) {
-      if (!dir.exists(l_path)) dir.create(l_path, recursive = TRUE)
-      for (file_info in content(res)) {
+      any_update_attempted <- TRUE
+      contents <- content(res)
+      if (!dir.exists(local_path)) dir.create(local_path, recursive = TRUE)
+      
+      n <- length(contents)
+      for (i in seq_along(contents)) {
+        file_info <- contents[[i]]
         if (file_info$type == "file") {
-          dest <- file.path(l_path, file_info$name)
-          if (git_sha1(dest) != file_info$sha) {
-            message("Updating: ", file_info$name)
-            tryCatch({
-              download.file(file_info$download_url, dest, mode = "wb", quiet = TRUE)
-              update_performed <- TRUE
-            }, error = function(e) { had_errors <<- TRUE })
+          if (!is.null(shiny_progress)) {
+            shiny_progress(value = i/n, detail = paste("Updating code:", file_info$name))
           }
+          dest_file <- file.path(local_path, file_info$name)
+          tryCatch({
+            download.file(file_info$download_url, dest_file, mode = "wb", quiet = TRUE)
+          }, error = function(e) { had_errors <<- TRUE })
         }
       }
     }
   }
   
-  # B. Root Files Update
-  for (f in root_files) {
-    res <- GET(sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f))
-    if (status_code(res) == 200) {
-      f_info <- content(res)
-      if (git_sha1(f) != f_info$sha) {
-        message("Updating core file: ", f)
+  # --- PARTIE B : Fichiers Racines (Seulement si update_roots est TRUE) ---
+  if (update_roots) {
+    root_files <- c("app.R", "config.yml") # Liste des fichiers racine à surveiller
+    for (f in root_files) {
+      url_file <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f)
+      res_file <- GET(url_file)
+      if (status_code(res_file) == 200) {
+        any_update_attempted <- TRUE
+        file_info <- content(res_file)
+        message("Updating root file: ", f)
         tryCatch({
-          download.file(f_info$download_url, f, mode = "wb", quiet = TRUE)
-          update_performed <- TRUE
+          download.file(file_info$download_url, f, mode = "wb", quiet = TRUE)
         }, error = function(e) { had_errors <<- TRUE })
       }
     }
   }
   
-  if (had_errors) message("--- Update finished with some errors ---")
-  else if (update_performed) message("--- System updated successfully ---")
-  else message("--- System already up to date ---")
-  
-  return(TRUE)
+  return(!had_errors)
 }
