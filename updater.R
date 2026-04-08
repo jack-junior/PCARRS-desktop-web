@@ -8,6 +8,10 @@ check_and_update <- function() {
   folders_map <- c("code" = "code")
   #root_files  <- c("app.R", "updater.R", "config.yml.example")
   
+  # 2. Fichiers racines (seulement si demandé au démarrage)
+  root_files <- if(update_roots) c("app.R", "updater.R", "config.yml") else c()
+  
+
   message("--- Starting System Update from GitHub ---")
   
   # On initialise à FALSE et on passe à TRUE uniquement si on fait des actions réelles
@@ -46,20 +50,20 @@ check_and_update <- function() {
   }
   
   # --- PARTIE B : Fichiers racines ---
-  # for (f in root_files) {
-  #   url_file <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f)
-  #   res_file <- GET(url_file)
-  #   
-  #   if (status_code(res_file) == 200) {
-  #     any_update_attempted <- TRUE
-  #     file_info <- content(res_file)
-  #     message(sprintf("Updating core file: %s", f))
-  #     tryCatch({
-  #       download.file(file_info$download_url, f, mode = "wb", quiet = TRUE)
-  #     }, error = function(e) { had_errors <<- TRUE })
-  #   }
-  # }
-  # 
+   for (f in root_files) {
+     url_file <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f)
+     res_file <- GET(url_file)
+     
+     if (status_code(res_file) == 200) {
+       any_update_attempted <- TRUE
+       file_info <- content(res_file)
+       message(sprintf("Updating core file: %s", f))
+       tryCatch({
+         download.file(file_info$download_url, f, mode = "wb", quiet = TRUE)
+       }, error = function(e) { had_errors <<- TRUE })
+     }
+   }
+   
   # LOGIQUE DE RETOUR FINALE
   if (any_update_attempted && !had_errors) {
     message("--- Update Complete! ---")
