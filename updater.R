@@ -3,16 +3,23 @@ library(digest)
 
 # --- Internal Helper: Calculate Git-style SHA1 for a local file ---
 # This matches the SHA format used by the GitHub API for comparison
+# --- updater.R (Updated Helper) ---
 git_sha1 <- function(filepath) {
-  if (!file.exists(filepath)) return("")
-  size <- file.info(filepath)$size
-  # GitHub calculates SHA1 as: "blob [size]\0[content]"
-  con <- file(filepath, "rb")
-  content <- readBin(con, "raw", n = size)
-  close(con)
+  if (!file.exists(filepath) || file.info(filepath)$size == 0) return("")
   
-  header <- charToRaw(paste0("blob ", size, "\0"))
-  return(digest(c(header, content), algo = "sha1", serialize = FALSE))
+  # Use tryCatch to prevent "nul character" crashes
+  sha <- tryCatch({
+    size <- file.info(filepath)$size
+    con <- file(filepath, "rb")
+    content <- readBin(con, "raw", n = size)
+    close(con)
+    
+    header <- charToRaw(paste0("blob ", size, "\0"))
+    digest(c(header, content), algo = "sha1", serialize = FALSE)
+  }, error = function(e) {
+    return("error")
+  })
+  return(sha)
 }
 
 check_and_update <- function(update_roots = FALSE) {
