@@ -18,7 +18,7 @@ message("--- Checking R Dependencies ---")
 required_packages <- c(
   "shiny", "bslib", "httr", "shinyFiles", "yaml", 
   "tidyverse", "GGIR", "ActCR", "actilifecounts", 
-  "shinyWidgets", "shinycssloaders"
+  "shinyWidgets", "shinycssloaders", "flextable", "officer", "doconv", "readxl"
 )
 
 installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
