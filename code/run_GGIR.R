@@ -94,6 +94,9 @@ GGIR(
   
   nonwearFiltermaxHours = 3,
   nonwearFilterWindow = c(20, 10),
+  verbose = TRUE,      
+  visualreport = TRUE, 
+  do.parallel = FALSE,
   
   LUXthresholds = c(0, 1, 10, 100, 300, 1000),
   LUX_day_segments = seq(0, 24, by = 1)

@@ -3,6 +3,15 @@ import yaml
 from pathlib import Path
 import sys
 import argparse # To handle IDs passed from R
+import ssl
+
+import os
+
+# --- FIX POUR L'ERREUR SSL ---
+if (not os.environ.get('PYTHONHTTPSVERIFY', '') and
+    getattr(ssl, '_create_unverified_context', None)):
+    ssl._create_default_https_context = ssl._create_unverified_context
+# -----------------------------
 
 # ------------------------------------
 # 1. LOAD CONFIGURATION
@@ -54,8 +63,19 @@ def find_bin_files(root: Path, filter_ids=None):
 def has_already_been_processed(bin_file: Path, output_root: Path) -> bool:
     file_stem = bin_file.stem
     per_file_output_dir = output_root / file_stem
+    
     if not per_file_output_dir.is_dir():
         return False
+
+    # On vérifie si un fichier CSV (le résultat final) existe dans le dossier
+    # Stepcount génère souvent 'stepcount.csv' ou un fichier incluant le nom
+    results = list(per_file_output_dir.glob("*.csv"))
+    
+    if len(results) > 0:
+        # Optionnel : vérifier que le fichier n'est pas vide (0 octets)
+        return results[0].stat().st_size > 0
+        
+    return False
     try:
         any_item = next(per_file_output_dir.iterdir(), None)
     except StopIteration:
@@ -112,8 +132,9 @@ def main():
         print(f"Filtering for IDs: {target_ids}")
 
     for bin_file in bin_files:
-        # If user selected specific IDs, we RE-PROCESS (overwrite) instead of skipping
-        if not target_ids and has_already_been_processed(bin_file, OUTPUT_ROOT):
+        # If user selected specific IDs, we RE-PROCESS (overwrite) instead of skipping XX
+        #if not target_ids and has_already_been_processed(bin_file, OUTPUT_ROOT):
+        if has_already_been_processed(bin_file, OUTPUT_ROOT):
             skipped_count += 1
             continue
 

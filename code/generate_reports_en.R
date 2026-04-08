@@ -6,16 +6,27 @@ library(officer)
 library(flextable)
 library(here)
 library(readxl)
+library(doconv)
+library(yaml) # Ajouté pour lire le config.yml
 
+# --- SÉCURITÉ SHINY ---
+if (!exists("target_id")) {
+  stop("clean_target_id is missing. This script must be run from the Shiny App.")
+}
 
 cfg <- yaml::read_yaml("config.yml")
 
+# Chemins basés sur config.yml
 path_data  <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
-path_demo  <- file.path(cfg$paths$raw_data, "Demo_Participant_Detail.xlsx") # Vérifie l'extension .xlsx ou .csv
-
+path_demo <- file.path("data", "participant_info", "participant_english.xlsx")
 path_img   <- "resources/images"
 path_logo1 <- file.path(path_img, "logo1.png")
 path_logo2 <- file.path(path_img, "logo2.png")
+
+# Dossier de sortie automatique
+report_out <- file.path(cfg$paths$reports, "reports_English")
+if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
+
 
 
 # Color Palette
@@ -33,11 +44,24 @@ fp_subtitle <- fp_text(font.size = 16, bold = TRUE, color = col_primary)
 # =====================================================
 # 1.a DATA PREPARATION
 # =====================================================
-data_metrics <- read_csv(path_data, show_col_types = FALSE) %>%
-  mutate(subject = as.character(subject))
+# Clean TARGET_ID
+clean_target_id <- substr(trimws(target_id), 1, 6)
 
-data_demo <- read_excel(here("data", "Demo_Participant_Detail.xlsx")) %>%
-  mutate(intnl_test_id = as.character(intnl_test_id))
+# --- DATA PREPARATION CIBLÉE ---
+data_metrics <- read_csv(path_data, show_col_types = FALSE) %>%
+  mutate(subject = as.character(subject)) %>%
+  filter(subject == clean_target_id) # On utilise l'ID nettoyé ici
+
+# Détection auto Excel ou CSV pour la démo
+if(grepl("\\.xlsx$", path_demo)) {
+  data_demo <- read_excel(path_demo)
+} else {
+  data_demo <- read_csv(path_demo, show_col_types = FALSE)
+}
+
+data_demo <- data_demo %>% 
+  mutate(intnl_test_id = as.character(intnl_test_id)) %>%
+  filter(intnl_test_id == clean_target_id) 
 
 data_full <- data_metrics %>%
   left_join(data_demo, by = c("subject" = "intnl_test_id"))
@@ -281,58 +305,42 @@ generate_officer_report <- function(pid, data_full, template_path) {
     body_add_fpar(fpar(ftext("Note: The activity and sleep information is preliminary and for research purpose. This is not a clinical assessment. Please contact us if you want further information.", prop = fp_italic), fp_p = fp_par(text.align = "center", padding.top = 10, padding.bottom = 10)))
   
   
-  report_out <- file.path(cfg$paths$summaries, "reports_English")
+  report_out <- file.path(cfg$paths$reports, "reports_English")
   if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
   
-  final_path <- file.path(report_out, paste0("Report_English_", pid, ".docx"))
-  print(doc, target = final_path)
-  return(final_path)
-}
-
-# =====================================================
-# 4. EXECUTION INDIVIDUAL REPORT GENERATION
-# =====================================================
-#data_full <- read_csv(path_data, show_col_types = FALSE)
-if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
-
-for(pid in unique(data_full$subject)) {
+  # --- SAVE AND EXPORT ---
+  # Utilise 'report_out' au lieu de 'here' pour respecter ta config
+  docx_path <- file.path(report_out, paste0("Report_English_", pid, ".docx"))
+  pdf_path  <- file.path(report_out, paste0("Report_English_", pid, ".pdf"))
+  
+  # Sauvegarde du Word
+  print(doc, target = docx_path)
+  
+  # Conversion en PDF
   tryCatch({
-    generate_officer_report(pid, data_full)
-    cat("Generated Report for PID:", pid, "✔\n")
-  }, error = function(e) cat("Error for PID:", pid, "-", e$message, "\n"))
+    to_pdf(docx_path, output = pdf_path)
+  }, error = function(e) {
+    message("PDF conversion failed for ", pid, ": ", e$message)
+  })
+  
+  return(pdf_path)
+
 }
 
 # =====================================================
-# 5. COMBINED REPORT GENERATION
+# 4. EXECUTION
 # =====================================================
+# Shiny définit 'target_id'. Le script ne traite QUE cet ID.
+cat("--- Generating Individual Report for ID:", clean_target_id, "---\n")
 
-report_files <- list.files(here("reports_English"), pattern = "Report_English_.*\\.docx", full.names = TRUE)
+# On s'assure que data_full ne contient que notre cible
+person_data <- data_full %>% filter(subject == clean_target_id)
 
-combined_doc <- read_docx() %>%
-  body_set_default_section(
-    value = prop_section(
-      page_mar = page_mar(header = 0.3, top = 0.6, bottom = 0.5, left = 1.0, right = 1.0)
-    )
-  )
-
-cat("--- Starting Combined Report Assembly ---\n")
-
-for(i in seq_along(report_files)) {
-  current_file <- report_files[i]
-
-  tryCatch({
-    combined_doc <- body_add_docx(combined_doc, src = current_file)
-
-    if(i < length(report_files)) {
-      combined_doc <- body_add_break(combined_doc)
-    }
-
-    cat("Merged:", basename(current_file), "[✔]\n")
-
-  }, error = function(e) cat("Error merging file:", current_file, "-", e$message, "\n"))
+if(nrow(person_data) > 0) {
+  # Appelle TA fonction originale (qui crée le Word et le PDF)
+  # Assure-toi que ta fonction utilise 'report_out' pour sauver
+  docx_final <- generate_officer_report(clean_target_id, person_data)
+  cat("✅ Individual Report Done for:", clean_target_id, "\n")
+} else {
+  stop("ID not found in combined metrics or participant info.")
 }
-
-final_combined_path <- here("reports_English", "Full_Study_Combined_Report.docx")
-print(combined_doc, target = final_combined_path)
-
-cat("--- Assembly Complete! ---\n")

@@ -6,18 +6,26 @@ library(officer)
 library(flextable)
 library(here)
 library(readxl)
+library(doconv)
+library(yaml) # Ajouté pour lire le config.yml
 
+# --- SÉCURITÉ SHINY ---
+if (!exists("target_id")) {
+  stop("target_id is missing. This script must be run from the Shiny App.")
+}
 
-# Chargement de la config
 cfg <- yaml::read_yaml("config.yml")
 
-# File paths
+# Chemins basés sur config.yml
 path_data  <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
-path_demo  <- file.path(cfg$paths$raw_data, "Demo_Participant_Detail.xlsx") # Vérifie l'extension .xlsx ou .csv
-
+path_demo <- file.path("data", "participant_info", "participant_hindi.xlsx")
 path_img   <- "resources/images"
 path_logo1 <- file.path(path_img, "logo1.png")
 path_logo2 <- file.path(path_img, "logo2.png")
+
+# Dossier de sortie automatique
+report_out <- file.path(cfg$paths$reports, "reports_Hindi")
+if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
 
 
 # Color Palette
@@ -35,11 +43,24 @@ fp_subtitle <- fp_text(font.size = 14, bold = TRUE, color = col_primary)
 # =====================================================
 # 1.a DATA PREPARATION
 # =====================================================
-data_metrics <- read_csv(path_data, show_col_types = FALSE) %>%
-  mutate(subject = as.character(subject))
+# Clean TARGET_ID
+clean_target_id <- substr(trimws(target_id), 1, 6)
 
-data_demo <- read_excel(here("data", "Demo_Participant_Detail_Hindi.xlsx")) %>%
-  mutate(intnl_test_id = as.character(intnl_test_id))
+# --- DATA PREPARATION CIBLÉE ---
+data_metrics <- read_csv(path_data, show_col_types = FALSE) %>%
+  mutate(subject = as.character(subject)) %>%
+  filter(subject == clean_target_id) # On utilise l'ID nettoyé ici
+
+# Détection auto Excel ou CSV pour la démo
+if(grepl("\\.xlsx$", path_demo)) {
+  data_demo <- read_excel(path_demo)
+} else {
+  data_demo <- read_csv(path_demo, show_col_types = FALSE)
+}
+
+data_demo <- data_demo %>% 
+  mutate(intnl_test_id = as.character(intnl_test_id)) %>%
+  filter(intnl_test_id == clean_target_id) 
 
 data_full <- data_metrics %>%
   left_join(data_demo, by = c("subject" = "intnl_test_id"))
@@ -176,7 +197,8 @@ generate_officer_report <- function(pid, data_full, template_path) {
     color(color = "white", part = "header") %>%
     bold(part = "header") %>%
 
-    compose(j = 1, value = as_paragraph(as_image(src = here("data", "img", paste0(Icon, ".png")), width = 0.6, height = 0.6)), part = "body") %>%
+    #compose(j = 1, value = as_paragraph(as_image(src = here("data", "img", paste0(Icon, ".png")), width = 0.6, height = 0.6)), part = "body") %>%
+    compose(j = 1, value = as_paragraph(as_image(src = file.path(path_img, paste0(Icon, ".png")), width = 0.6, height = 0.6)), part = "body") %>%
     compose(j = 4, value = as_paragraph(
       as_chunk("व्याख्या: ", props = fp_text(bold = TRUE, color = col_primary)),
       as_chunk(Interpretation)
@@ -310,58 +332,37 @@ generate_officer_report <- function(pid, data_full, template_path) {
     # Final Research Note
     body_add_fpar(fpar(ftext("नोट: गतिविधि और नींद की यह जानकारी शुरुआती है और केवल शोध के उद्देश्य से है। यह कोई क्लिनिकल जांच (डॉक्टरी रिपोर्ट) नहीं है। यदि आप और अधिक जानकारी चाहते हैं, तो कृपया हमसे संपर्क करें।", prop = fp_italic), fp_p = fp_par(text.align = "center")))
 
-  report_out <- file.path(cfg$paths$summaries, "reports_Hindi")
+  report_out <- file.path(cfg$paths$reports, "reports_Hindi")
   if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
   
-  final_path <- file.path(reports_out, paste0("Report_Hindi_", pid, ".docx"))
-  print(doc, target = final_path)
-  return(final_path)
-}
-
-# =====================================================
-# 4. EXECUTION INDIVIDUAL REPORT GENERATION
-# =====================================================
-#data_full <- read_csv(path_data, show_col_types = FALSE)
-if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
-
-for(pid in unique(data_full$subject)) {
+  # --- SAVE AND EXPORT ---
+  docx_path <- file.path(report_out, paste0("Report_Hindi_", pid, ".docx"))
+  pdf_path  <- file.path(report_out, paste0("Report_Hindi_", pid, ".pdf"))
+  
+  # Sauvegarde du Word
+  print(doc, target = docx_path)
+  
+  # Conversion en PDF
   tryCatch({
-    generate_officer_report(pid, data_full)
-    cat("Generated Report for PID:", pid, "✔\n")
-  }, error = function(e) cat("Error for PID:", pid, "-", e$message, "\n"))
+    doconv::to_pdf(docx_path, output = pdf_path)
+  }, error = function(e) {
+    message("PDF conversion failed for ", pid, ": ", e$message)
+  })
+  
+  return(pdf_path)
 }
 
 # =====================================================
-# 5. COMBINED REPORT GENERATION
+# 4. EXECUTION
 # =====================================================
+cat("--- Generating Individual Report (HINDI) for ID:", clean_target_id, "---\n")
 
-report_files <- list.files(here("reports_Hindi"), pattern = "Report_Hindi_.*\\.docx", full.names = TRUE)
+person_data <- data_full %>% filter(subject == clean_target_id)
 
-combined_doc <- read_docx() %>%
-  body_set_default_section(
-    value = prop_section(
-      page_mar = page_mar(header = 0.3, top = 0.6, bottom = 0.5, left = 1.0, right = 1.0)
-    )
-  )
-
-cat("--- Starting Combined Report Assembly ---\n")
-
-for(i in seq_along(report_files)) {
-  current_file <- report_files[i]
-
-  tryCatch({
-    combined_doc <- body_add_docx(combined_doc, src = current_file)
-
-    if(i < length(report_files)) {
-      combined_doc <- body_add_break(combined_doc)
-    }
-
-    cat("Merged:", basename(current_file), "[✔]\n")
-
-  }, error = function(e) cat("Error merging file:", current_file, "-", e$message, "\n"))
+if(nrow(person_data) > 0) {
+  # Note: on passe person_data (qui est déjà filtré) à la fonction
+  docx_final <- generate_officer_report(clean_target_id, person_data)
+  cat("✅ Individual Hindi Report Done for:", clean_target_id, "\n")
+} else {
+  stop("ID not found in combined metrics or participant info (Hindi).")
 }
-
-final_combined_path <- here("reports_Hindi", "Full_Study_Combined_Report_hindi.docx")
-print(combined_doc, target = final_combined_path)
-
-cat("--- Assembly Complete! ---\n")

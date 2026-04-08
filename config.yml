@@ -9,3 +9,4 @@ paths:
   img_folder: resources/images
   summaries: summaries
   ggir_output: GGIR
+  reports: "reports"
