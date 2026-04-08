@@ -1,49 +1,52 @@
 # --- launch.R ---
 
 # A. DEFINE ABSOLUTE PATHS
-# Using normalizePath ensures Windows understands the full drive path (e.g., C:/...)
-# which often bypasses "folder not writable" errors during package installation.
+# normalizePath converts relative paths to full Windows paths (C:/Users/...)
+# This is essential for write permissions and DLL stability.
 project_path <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 local_lib    <- file.path(project_path, "resources", "R_libs")
 
 # B. DIRECTORY PREPARATION
-# Create the library folder if it's missing before trying to use it
 if (!dir.exists(local_lib)) {
   dir.create(local_lib, recursive = TRUE, showWarnings = FALSE)
 }
 
 # C. FORCE R TO USE LOCAL LIBRARIES
-# Set environmental variable for the session and update .libPaths
+# We override the system library paths to prioritize your portable folder
 Sys.setenv(R_LIBS_USER = local_lib)
 .libPaths(c(local_lib, .libPaths()))
 
-# Diagnostic messages for the console
+# Diagnostic console messages
 message(">>> Working Directory: ", project_path)
 message(">>> Using Library Path: ", local_lib)
 
 # D. LOAD CORE DEPENDENCIES
-# We explicitly use lib.loc to ensure we aren't loading from a system R folder
+# digest is now required for the smart update (SHA1)
 tryCatch({
+  library(digest, lib.loc = local_lib)
   library(httr, lib.loc = local_lib)
   library(shiny, lib.loc = local_lib)
 }, error = function(e) {
-  message(">>> Initial load warning: Core packages might be missing. App will attempt auto-install.")
+  message(">>> Warning: Core packages missing or corrupted. Attempting to recover via updater...")
 })
 
-# E. UPDATER LOGIC
-# Check for updates from GitHub before the Shiny UI starts
+# E. SMART UPDATER LOGIC
 if (file.exists("updater.R")) {
-  message("--- Checking for core updates (app.R, updater.R) ---")
+  message("--- Checking for updates (app.R, code/, etc.) ---")
   tryCatch({
-    source("updater.R")
-    # This function will overwrite local files with the latest versions from GitHub
+    # We specify UTF-8 encoding to avoid the 'nul character' crash
+    source("updater.R", local = TRUE, encoding = "UTF-8")
+    
+    # Run the smart update function
     check_and_update(update_roots = TRUE) 
   }, error = function(e) {
-    message(">>> Update failed, starting with local version: ", e$message)
+    # If update fails (e.g. no internet), we catch the error and continue
+    message(">>> Update system encountered an issue: ", e$message)
+    message(">>> Launching local version instead.")
   })
 }
 
 # F. LAUNCH SHINY APP
 message("--- Starting UI ---")
-# Launch the app located in the project root
+# Run the application located in the current project root
 shiny::runApp(project_path, launch.browser = TRUE)

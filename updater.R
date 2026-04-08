@@ -1,23 +1,21 @@
+# --- updater.R ---
 library(httr)
 library(digest)
 
-# --- Internal Helper: Calculate Git-style SHA1 for a local file ---
-# This matches the SHA format used by the GitHub API for comparison
-# --- updater.R (Updated Helper) ---
+# Robust SHA1 calculation to avoid "nul character" errors
 git_sha1 <- function(filepath) {
   if (!file.exists(filepath) || file.info(filepath)$size == 0) return("")
   
-  # Use tryCatch to prevent "nul character" crashes
   sha <- tryCatch({
-    size <- file.info(filepath)$size
     con <- file(filepath, "rb")
+    size <- file.info(filepath)$size
     content <- readBin(con, "raw", n = size)
     close(con)
     
     header <- charToRaw(paste0("blob ", size, "\0"))
     digest(c(header, content), algo = "sha1", serialize = FALSE)
   }, error = function(e) {
-    return("error")
+    return("error_reading_file")
   })
   return(sha)
 }
@@ -26,89 +24,55 @@ check_and_update <- function(update_roots = FALSE) {
   owner <- "jack-junior"
   repo  <- "PCARRS-desktop-web"
   
-  # Folders to sync (GitHub Folder Name = Local Folder Name)
   folders_map <- c("code" = "code")
-  
-  # Core files (only updated if update_roots is TRUE)
   root_files <- if(update_roots) c("app.R", "updater.R", "config.yml") else c()
   
-  message("--- Starting System Update Check (GitHub) ---")
-  
+  message("--- Checking GitHub for Updates ---")
   update_performed <- FALSE
   had_errors <- FALSE
   
-  # --- PART A: Folder Synchronization (Smart Diff) ---
+  # A. Folders Update
   for (i in seq_along(folders_map)) {
-    github_path <- names(folders_map)[i]
-    local_path  <- folders_map[[i]]
+    g_path <- names(folders_map)[i]
+    l_path <- folders_map[[i]]
     
-    url <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, github_path)
-    res <- GET(url)
+    res <- GET(sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, g_path))
     
     if (status_code(res) == 200) {
-      contents <- content(res)
-      if (!dir.exists(local_path)) dir.create(local_path, recursive = TRUE)
-      
-      for (file_info in contents) {
+      if (!dir.exists(l_path)) dir.create(l_path, recursive = TRUE)
+      for (file_info in content(res)) {
         if (file_info$type == "file") {
-          dest_file <- file.path(local_path, file_info$name)
-          
-          # Check if the file actually changed
-          remote_sha <- file_info$sha
-          local_sha  <- git_sha1(dest_file)
-          
-          if (local_sha != remote_sha) {
-            message(sprintf("Diff detected: Updating %s...", file_info$name))
+          dest <- file.path(l_path, file_info$name)
+          if (git_sha1(dest) != file_info$sha) {
+            message("Updating: ", file_info$name)
             tryCatch({
-              download.file(file_info$download_url, dest_file, mode = "wb", quiet = TRUE)
+              download.file(file_info$download_url, dest, mode = "wb", quiet = TRUE)
               update_performed <- TRUE
-            }, error = function(e) { 
-              message("Error downloading: ", file_info$name)
-              had_errors <<- TRUE 
-            })
-          } else {
-             message(sprintf("Up to date: %s", file_info$name)) # Optional verbose
+            }, error = function(e) { had_errors <<- TRUE })
           }
         }
       }
-    } else {
-      message(sprintf("Skipping: Folder '%s' not found (Status: %s)", github_path, status_code(res)))
-      had_errors <- TRUE
     }
   }
   
-  # --- PART B: Core Files Synchronization (Smart Diff) ---
+  # B. Root Files Update
   for (f in root_files) {
-    url_file <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f)
-    res_file <- GET(url_file)
-    
-    if (status_code(res_file) == 200) {
-      file_info <- content(res_file)
-      remote_sha <- file_info$sha
-      local_sha  <- git_sha1(f)
-      
-      if (local_sha != remote_sha) {
-        message(sprintf("Diff detected: Updating core file %s...", f))
+    res <- GET(sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f))
+    if (status_code(res) == 200) {
+      f_info <- content(res)
+      if (git_sha1(f) != f_info$sha) {
+        message("Updating core file: ", f)
         tryCatch({
-          download.file(file_info$download_url, f, mode = "wb", quiet = TRUE)
+          download.file(f_info$download_url, f, mode = "wb", quiet = TRUE)
           update_performed <- TRUE
-        }, error = function(e) { 
-          message("Error updating core file: ", f)
-          had_errors <<- TRUE 
-        })
+        }, error = function(e) { had_errors <<- TRUE })
       }
     }
   }
   
-  # FINAL STATUS LOGIC
-  if (had_errors) {
-    message("--- Update Finished with Warnings (Check Console) ---")
-    return(FALSE)
-  } else if (update_performed) {
-    message("--- Update Complete: Files synchronized! ---")
-    return(TRUE)
-  } else {
-    message("--- System is already up to date (No diffs) ---")
-    return(TRUE)
-  }
+  if (had_errors) message("--- Update finished with some errors ---")
+  else if (update_performed) message("--- System updated successfully ---")
+  else message("--- System already up to date ---")
+  
+  return(TRUE)
 }
