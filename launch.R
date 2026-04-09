@@ -24,18 +24,19 @@ Sys.setenv(R_LIBS_USER = local_lib)
 .libPaths(c(local_lib, .libPaths()))
 
 # D. LOAD CORE DEPENDENCIES
-tryCatch({
-  library(digest, lib.loc = local_lib)
-  library(httr, lib.loc = local_lib)
-  library(shiny, lib.loc = local_lib)
-  
-  if (!require(later, lib.loc = local_lib, quietly = TRUE)) {
-    message(">>> Installing missing dependency: later")
-    install.packages("later", lib = local_lib, repos = "https://cloud.r-project.org")
-    library(later, lib.loc = local_lib)
-  }
-}, error = function(e) {
-  message(">>> Critical Error during package load: ", e$message)
+suppressPackageStartupMessages({
+  tryCatch({
+    library(digest, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)
+    library(httr, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)
+    library(shiny, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)
+    
+    if (!require(later, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)) {
+      install.packages("later", lib = local_lib, repos = "https://cloud.r-project.org")
+      library(later, lib.loc = local_lib, quietly = TRUE)
+    }
+  }, error = function(e) {
+    # On ne montre l'erreur que si c'est vraiment critique
+  })
 })
 
 # E. SMART UPDATER LOGIC
