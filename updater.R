@@ -9,27 +9,33 @@ check_and_update <- function(update_roots = FALSE, update_code = TRUE, shiny_pro
   
   # --- PARTIE A : Dossier /code (Seulement si update_code est TRUE) ---
   if (update_code) {
-    github_path <- "code"
-    local_path  <- "code"
-    url <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, github_path)
-    res <- GET(url)
+    # On itère sur chaque dossier un par un
+    folders_to_sync <- c("code", "resources/images")
     
-    if (status_code(res) == 200) {
-      any_update_attempted <- TRUE
-      contents <- content(res)
-      if (!dir.exists(local_path)) dir.create(local_path, recursive = TRUE)
+    for (folder in folders_to_sync) {
+      url <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, folder)
+      res <- GET(url)
       
-      n <- length(contents)
-      for (i in seq_along(contents)) {
-        file_info <- contents[[i]]
-        if (file_info$type == "file") {
-          if (!is.null(shiny_progress)) {
-            shiny_progress(value = i/n, detail = paste("Updating code:", file_info$name))
+      if (status_code(res) == 200) {
+        any_update_attempted <- TRUE
+        contents <- content(res)
+        
+        # CRUCIAL : On utilise 'folder' comme chemin local
+        if (!dir.exists(folder)) dir.create(folder, recursive = TRUE)
+        
+        n <- length(contents)
+        for (i in seq_along(contents)) {
+          file_info <- contents[[i]]
+          if (file_info$type == "file") {
+            if (!is.null(shiny_progress)) {
+              shiny_progress(value = i/n, detail = paste("Syncing", folder, ":", file_info$name))
+            }
+            # On construit le chemin de destination basé sur le dossier actuel
+            dest_file <- file.path(folder, file_info$name)
+            tryCatch({
+              download.file(file_info$download_url, dest_file, mode = "wb", quiet = TRUE)
+            }, error = function(e) { had_errors <<- TRUE })
           }
-          dest_file <- file.path(local_path, file_info$name)
-          tryCatch({
-            download.file(file_info$download_url, dest_file, mode = "wb", quiet = TRUE)
-          }, error = function(e) { had_errors <<- TRUE })
         }
       }
     }
