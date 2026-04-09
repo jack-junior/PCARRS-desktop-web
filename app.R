@@ -11,6 +11,7 @@ library(shinyFiles)
 library(yaml)        
 library(tidyverse) 
 library(shinyWidgets) 
+library(shinyjs)
 
 message("--- Checking R Dependencies ---")
 
@@ -18,7 +19,7 @@ message("--- Checking R Dependencies ---")
 required_packages <- c(
   "shiny", "bslib", "httr", "shinyFiles", "yaml", 
   "tidyverse", "GGIR", "ActCR", "actilifecounts", 
-  "shinyWidgets", "shinycssloaders", "flextable", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
+  "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
 )
 
 
@@ -44,54 +45,77 @@ library(actilifecounts)
 py_env_path <- file.path(getwd(), "resources", "python_env")
 mamba_exe   <- file.path(getwd(), "resources", "bin", "micromamba.exe")
 
-setup_python_env <- function() {
-  # --- BLOC A : CRÉATION ---
-  if (!dir.exists(py_env_path)) {
-    message("--- 🛠️ CREATING NEW PYTHON 3.9 ENVIRONMENT ---")
-    if (!file.exists(mamba_exe)) stop("micromamba.exe missing!")
+setup_python_env <- function(shiny_session = NULL) {
+  # 1. Ensure the log file exists for the UI to read it
+  log_file <- "pipeline_log.txt"
+  if(!file.exists(log_file)) file.create(log_file)
+  
+  # 2. Check if Micromamba exists
+  if (!file.exists(mamba_exe)) {
+    write(paste(Sys.time(), "❌ ERROR: micromamba.exe missing in resources/bin/"), file=log_file, append=TRUE)
+    return(FALSE)
+  }
+  
+  # 3. BLOC A: ENVIRONMENT CREATION (If folder is empty/missing)
+  if (!dir.exists(py_env_path) || length(list.files(py_env_path)) == 0) {
+    if(!dir.exists(py_env_path)) dir.create(py_env_path, recursive = TRUE)
     
-    # Suppression de l'argument problématique --no-default-packages
+    write(paste(Sys.time(), "--- 🛠️ CREATING NEW PYTHON 3.9 ENVIRONMENT ---"), file=log_file, append=TRUE)
+    
     cmd_create <- paste(
       shQuote(mamba_exe), "create", 
       "-p", shQuote(py_env_path), 
       "-c conda-forge", 
-      "python=3.9 openjdk=11 pip setuptools wheel -y"
+      "python=3.9 openjdk=11 pip setuptools wheel -y >>", log_file, "2>&1"
     )
     
-    message(">>> Executing Micromamba (Creating environment)...")
-    system(cmd_create)
+    # Run in background
+    shell(cmd_create, wait = TRUE)
+    
+    # Monitor the process for the Progress Bar
+    if (!is.null(shiny_session)) {
+      withProgress(message = 'Downloading & Installing Python', value = 0, {
+        while(TRUE) {
+          # Check if micromamba is still working
+          is_running <- any(grepl("micromamba.exe", system("tasklist", intern = TRUE)))
+          if(!is_running) break
+          
+          incProgress(0.02, detail = "Downloading packages from conda-forge...")
+          Sys.sleep(2) # Give R time to breathe and update the UI Log
+        }
+        setProgress(1, detail = "Base Python Installed.")
+      })
+    }
   }
   
-  # --- BLOC B : VÉRIFICATION (Chemin Intelligent) ---
+  # 4. BLOC B: PIP INSTALLATION (stepcount)
   path_root <- file.path(py_env_path, "python.exe")
   path_scripts <- file.path(py_env_path, "Scripts", "python.exe")
-  
-  # On choisit celui qui existe vraiment
-  local_python <- if (file.exists(path_root)) {
-    path_root
-  } else if (file.exists(path_scripts)) {
-    path_scripts
-  } else {
-    NULL
-  }
+  local_python <- if (file.exists(path_root)) path_root else if (file.exists(path_scripts)) path_scripts else NULL
   
   if (!is.null(local_python)) {
-    message(">>> 🔍 Python found at: ", local_python)
-    message(">>> Installing/Verifying stepcount & PyYAML...")
+    write(paste(Sys.time(), ">>> Installing Stepcount & PyYAML..."), file=log_file, append=TRUE)
     
-    # On lance l'installation via le moteur Python trouvé
-    cmd_repair <- paste(shQuote(local_python), "-m pip install stepcount PyYAML")
-    system(cmd_repair)
+    cmd_pip <- paste(shQuote(local_python), "-m pip install stepcount PyYAML >>", log_file, "2>&1")
     
-    message("--- ✅ PYTHON LIBRARIES READY ---")
+    if (!is.null(shiny_session)) {
+      withProgress(message = 'Finalizing Libraries', value = 0.8, {
+        shell(cmd_pip, wait = TRUE)
+        while(TRUE) {
+          is_running <- any(grepl("python.exe", system("tasklist", intern = TRUE)))
+          if(!is_running) break
+          incProgress(0.05, detail = "Installing pip packages...")
+          Sys.sleep(1)
+        }
+      })
+    }
+    write(paste(Sys.time(), "--- ✅ PYTHON ENVIRONMENT READY ---"), file=log_file, append=TRUE)
+    return(TRUE)
   } else {
-    message("❌ FATAL ERROR: python.exe introuvable dans le dossier env.")
-    message("Contenu du dossier pour diagnostic : ", paste(list.files(py_env_path), collapse=", "))
+    write(paste(Sys.time(), "❌ FATAL ERROR: python.exe not found after installation."), file=log_file, append=TRUE)
+    return(FALSE)
   }
 }
-
-# Execute the setup
-setup_python_env()
 
 # Load updater logic if present
 if (file.exists("updater.R")) source("updater.R")
@@ -99,6 +123,7 @@ if (file.exists("updater.R")) source("updater.R")
 ui <- page_navbar(
   title = "GeneActiv Analysis Suite",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
+  shinyjs::useShinyjs(),
   
   header = tags$head(
     tags$style("
@@ -222,7 +247,12 @@ ui <- page_navbar(
               card(
                 card_header("System Status"),
                 verbatimTextOutput("sys_status"),
-                actionButton("btn_check_sys", "Re-check Dependencies", class = "btn-secondary")
+                layout_column_wrap(
+                  width = 1/2,
+                  actionButton("btn_check_sys", "Check dependencies", class = "btn-secondary w-100"),
+                  # This button will be highlighted if installation is needed
+                  uiOutput("install_button_ui") 
+                )
               )
             )
   ),
@@ -407,17 +437,27 @@ server <- function(input, output, session) {
   })
   
   # --- 4. SYSTEM STATUS UPDATES ---
+  
+  # Reactive value to track if python is ready
+  py_ready <- reactiveVal(FALSE)
+  check_trigger <- reactiveVal(0)
+  
   output$sys_status <- renderText({
-    req(input$btn_check_sys)
+    check_trigger()
+    # We check the folder content
+    env_exists <- dir.exists(py_env_path) && length(list.files(py_env_path)) > 0
+    py_ready(env_exists) # Update our reactive state
     
     status_msg <- c(
       sprintf("Current Time: %s", Sys.time()),
       "---------------------------",
-      sprintf("[ ] Micromamba Engine: %s", if(file.exists(mamba_exe)) "FOUND" else "MISSING"),
-      sprintf("[ ] Python Virtual Env: %s", if(dir.exists(py_env_path)) "READY" else "NOT CREATED"),
-      sprintf("[ ] R Local Libraries: %s", if(length(missing_pkgs) == 0) "ALL INSTALLED" else paste("MISSING:", length(missing_pkgs))),
+      sprintf("[ %s ] Micromamba Engine", if(file.exists(mamba_exe)) "✅ READY"   else "❌ MISSING"),
+      sprintf("[ %s ] Python Virtual Env", if(env_exists) "✅ READY" else "⚠️ MISSING"),
+      sprintf("[ %s ] R Local Libraries", if(length(missing_pkgs) == 0) "✅ READY" else "❌ MISSING"),
       "---------------------------"
     )
+    if(!env_exists) status_msg <- c(status_msg, "ACTION: Please click 'Initialize Python Environment'")
+    
     paste(status_msg, collapse = "\n")
   })
   
@@ -426,6 +466,55 @@ server <- function(input, output, session) {
     showNotification("Re-checking system environment...", type = "message")
     setup_python_env() 
     showNotification("System check complete.", type = "message")
+  })
+  
+  observeEvent(input$btn_install_py, {
+    # Confirm before starting a long download
+    showModal(modalDialog(
+      title = "Initial Setup",
+      "This will download and install Python (approx. 500MB - 1GB). This might take 5-10 minutes depending on your internet connection.",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_install", "Start Download", class = "btn-primary")
+      )
+    ))
+  })
+  
+  
+  observeEvent(input$confirm_install, {
+    removeModal()
+    showNotification("Installation started. Watch the console below.", type = "message")
+    
+    # Call the non-blocking function we discussed
+    success <- setup_python_env(shiny_session = session)
+    
+    if(success) {
+      check_trigger(check_trigger() + 1)
+      showNotification("Python Environment successfully installed!", type = "success")
+    } else {
+      showNotification("Installation encountered an error. See log.", type = "error")
+    }
+  })
+  
+  
+  
+  # Dynamic UI for the Install Button
+  output$install_button_ui <- renderUI({
+    if (!py_ready()) {
+      actionButton("btn_install_py", "Initialize Python Environment", 
+                   class = "btn-danger w-100", icon = icon("download"))
+    } else {
+      actionButton("btn_install_py", "Reinstall / Repair Python", 
+                   class = "btn-outline-secondary w-100")
+    }
+  })
+  
+  observe({
+    if(!py_ready()) {
+      shinyjs::disable("run_full_pipeline") # Nécessite library(shinyjs)
+    } else {
+      shinyjs::enable("run_full_pipeline")
+    }
   })
   
   # --- 5. LOGGING ENGINE (Defined Once) ---
@@ -729,6 +818,8 @@ server <- function(input, output, session) {
       if (success) showNotification("Scripts updated successfully!", type = "message")
     })
   })
+  
+  
   
 } 
 

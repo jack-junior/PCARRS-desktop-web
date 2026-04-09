@@ -48,5 +48,23 @@ if (file.exists("updater.R")) {
 
 # F. LAUNCH SHINY APP
 message("--- Starting UI ---")
-# Run the application located in the current project root
-shiny::runApp(project_path, launch.browser = TRUE)
+
+port <- 1234
+url <- paste0("http://127.0.0.1:", port)
+
+# 1. On prépare la commande Chrome (avec les guillemets corrigés)
+browser_path <- "C:/Program Files/Google/Chrome/Application/chrome.exe"
+if(!file.exists(browser_path)) {
+  browser_path <- "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+}
+launch_cmd <- paste0('start "" "', browser_path, '" --app=', url)
+
+# 2. FONCTION ASTUCIEUSE : On lance Chrome avec un léger retard
+# Cela permet à Shiny de démarrer pendant que R attend
+later::later(function() {
+  shell(launch_cmd, wait = FALSE)
+}, delay = 3) # On attend 3 secondes (ajuste si ton PC est très lent)
+
+# 3. Lancement immédiat de l'app Shiny
+# (Le processus bloquera ici, mais la fonction "later" s'exécutera en parallèle)
+shiny::runApp(project_path, port = port, launch.browser = FALSE)
