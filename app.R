@@ -367,6 +367,11 @@ ui <- page_navbar(
 
 server <- function(input, output, session) {
   
+  session$onSessionEnded(function() {
+    stopApp()
+    q("no") # Ferme proprement R
+  })
+  
   # --- 1. DIRECTORY SELECTION LOGIC ---
   # Get available drives (C:, D:, etc. on Windows / Volumes on Mac)
   roots <- getVolumes()()
