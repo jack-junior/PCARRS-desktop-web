@@ -58,19 +58,22 @@ setup_python_env <- function(shiny_session = NULL) {
   
   # 3. BLOC A: ENVIRONMENT CREATION (If folder is empty/missing)
   if (!dir.exists(py_env_path) || length(list.files(py_env_path)) == 0) {
-    if(!dir.exists(py_env_path)) dir.create(py_env_path, recursive = TRUE)
+    # CORRECTIF : Supprimer le dossier s'il existe mais est incomplet
+    if(dir.exists(py_env_path)) unlink(py_env_path, recursive = TRUE, force = TRUE)
+    dir.create(py_env_path, recursive = TRUE)
     
     write(paste(Sys.time(), "--- 🛠️ CREATING NEW PYTHON 3.9 ENVIRONMENT ---"), file=log_file, append=TRUE)
     
+    # AJOUT de --yes et --always-copy pour plus de stabilité en mode portable
     cmd_create <- paste(
       shQuote(mamba_exe), "create", 
       "-p", shQuote(py_env_path), 
       "-c conda-forge", 
-      "python=3.9 openjdk=11 pip setuptools wheel -y >>", log_file, "2>&1"
+      "python=3.9 openjdk=11 pip setuptools wheel -y --always-copy"
     )
     
     # Run in background
-    shell(cmd_create, wait = TRUE)
+    system(cmd_create, wait = TRUE, invisible = FALSE)
     
     # Monitor the process for the Progress Bar
     if (!is.null(shiny_session)) {
@@ -83,7 +86,7 @@ setup_python_env <- function(shiny_session = NULL) {
           incProgress(0.02, detail = "Downloading packages from conda-forge...")
           Sys.sleep(2) # Give R time to breathe and update the UI Log
         }
-        setProgress(1, detail = "Base Python Installed.")
+        setProgress(1)
       })
     }
   }
@@ -96,7 +99,7 @@ setup_python_env <- function(shiny_session = NULL) {
   if (!is.null(local_python)) {
     write(paste(Sys.time(), ">>> Installing Stepcount & PyYAML..."), file=log_file, append=TRUE)
     
-    cmd_pip <- paste(shQuote(local_python), "-m pip install stepcount PyYAML >>", log_file, "2>&1")
+    cmd_pip <- paste(shQuote(local_python), "-m pip install stepcount PyYAML")
     
     if (!is.null(shiny_session)) {
       withProgress(message = 'Finalizing Libraries', value = 0.8, {
@@ -217,7 +220,7 @@ ui <- page_navbar(
     var el = document.getElementById('log_console_js');
     if (el) {
       // On met à jour uniquement le contenu texte
-      el.textContent = message.text + (message.cursor ? ' █' : ' _');
+      el.textContent = message.text.split('\n').slice(-100).join('\n') + (message.cursor ? ' █' : ' _');
       // Auto-scroll fluide
       // el.scrollTop = el.scrollHeight;
     }
@@ -414,7 +417,7 @@ server <- function(input, output, session) {
     if(!dir.exists("summaries")) dir.create("summaries")
     if(!dir.exists("GGIR")) dir.create("GGIR")
     
-    showNotification("Configuration Saved Successfully!", type = "message")
+    showNotification("Configuration Saved Successfully!", type = "default")
   })
   
   # --- 3. DYNAMIC FILE LISTING (For Selective Mode) ---
@@ -463,16 +466,16 @@ server <- function(input, output, session) {
   
   # Re-run setup if button clicked
   observeEvent(input$btn_check_sys, {
-    showNotification("Re-checking system environment...", type = "message")
+    showNotification("Re-checking system environment...", type = "default")
     setup_python_env() 
-    showNotification("System check complete.", type = "message")
+    showNotification("System check complete.", type = "default")
   })
   
   observeEvent(input$btn_install_py, {
     # Confirm before starting a long download
     showModal(modalDialog(
       title = "Initial Setup",
-      "This will download and install Python (approx. 500MB - 1GB). This might take 5-10 minutes depending on your internet connection.",
+      "This will download and install Python (approx. 1.5GB - 2GB). This might take 25-35 minutes depending on your internet connection.",
       footer = tagList(
         modalButton("Cancel"),
         actionButton("confirm_install", "Start Download", class = "btn-primary")
@@ -483,16 +486,17 @@ server <- function(input, output, session) {
   
   observeEvent(input$confirm_install, {
     removeModal()
-    showNotification("Installation started. Watch the console below.", type = "message")
+    showNotification("Installation will start soon. Wait for the progress bar... Refresh if process freeze.", type = "warning")
     
-    # Call the non-blocking function we discussed
+    # Execute the installation
     success <- setup_python_env(shiny_session = session)
     
+    # FORCE status update immediately after
     if(success) {
-      check_trigger(check_trigger() + 1)
-      showNotification("Python Environment successfully installed!", type = "success")
-    } else {
-      showNotification("Installation encountered an error. See log.", type = "error")
+      # Force the trigger to change so that output$sys_status updates
+      check_trigger(check_trigger() + 1) 
+      py_ready(TRUE) # Force state to TRUE
+      showNotification("Python is ready!", type = "message")
     }
   })
   
@@ -553,7 +557,7 @@ server <- function(input, output, session) {
                         "READY: Awaiting system log...\n",
                         "------------------------------------------\n"), 
                  "pipeline_log.txt")
-      showNotification("Console cleared", type = "message")
+      showNotification("Console cleared", type = "default")
     }
   })
   
@@ -561,7 +565,7 @@ server <- function(input, output, session) {
   observeEvent(input$run_full_pipeline, {
     
     # Notification de démarrage
-    showNotification("🚀 Analysis Started", type = "message", duration = 5)
+    showNotification("🚀 Analysis Started", type = "default", duration = 5)
     
     # Variables globales pour les sous-scripts
     selected_filenames <<- if(input$run_mode == "selective") input$selected_files else NULL
@@ -574,7 +578,7 @@ server <- function(input, output, session) {
       
       con <- file(log_file, open = "wt")
       
-      sink(con, type = "message")
+      sink(con, type = "default")
       sink(con, type = "output")
       
       log_msg <- function(msg) {
@@ -704,7 +708,7 @@ server <- function(input, output, session) {
         log_msg("******************************************")
       }, finally = {
         # Libération systématique des flux
-        sink(type = "message")
+        sink(type = "default")
         sink(type = "output")
         if (isOpen(con)) close(con)
       })
@@ -712,7 +716,7 @@ server <- function(input, output, session) {
       setProgress(1)
     })
     
-    showNotification("✅ Pipeline Finished", type = "message")
+    showNotification("✅ Pipeline Finished", type = "default")
   })
   
   # --- 7. REPORT GENERATION ---
@@ -770,7 +774,7 @@ server <- function(input, output, session) {
         }
       }
     })
-    showNotification("✅ Selected reports have been generated!", type = "message")
+    showNotification("✅ Selected reports have been generated!", type = "default")
   })
   
   # Logique pour fusionner les rapports
@@ -793,7 +797,7 @@ server <- function(input, output, session) {
         if(file.exists(merge_script_path)) {
           tryCatch({
             source(merge_script_path, local = TRUE)
-            showNotification(paste("✅ Combined Report", toupper(lang), "created!"), type = "message")
+            showNotification(paste("✅ Combined Report", toupper(lang), "created!"), type = "default")
           }, error = function(e) {
             showNotification(paste("❌ Error merging", lang, ":", e$message), type = "error")
           })
@@ -815,7 +819,7 @@ server <- function(input, output, session) {
         FALSE
       })
       
-      if (success) showNotification("Scripts updated successfully!", type = "message")
+      if (success) showNotification("Scripts updated successfully!", type = "default")
     })
   })
   
