@@ -13,26 +13,26 @@ library(tidyverse)
 library(shinyWidgets) 
 library(shinyjs)
 
-message("--- Checking R Dependencies ---")
-
- # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
- required_packages <- c(
-   "shiny", "bslib", "httr", "shinyFiles", "yaml", 
-   "tidyverse", "GGIR", "ActCR", "actilifecounts", 
-   "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
- )
- 
- 
- installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
- missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
- 
- if (length(missing_pkgs) > 0) {
-   message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
-   install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
-   message(">>> R packages installed successfully.")
- } else {
-   message(">>> All R dependencies are present.")
- }
+# message("--- Checking R Dependencies ---")
+# 
+#  # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
+#  required_packages <- c(
+#    "shiny", "bslib", "httr", "shinyFiles", "yaml", 
+#    "tidyverse", "GGIR", "ActCR", "actilifecounts", 
+#    "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
+#  )
+#  
+#  
+#  installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+#  missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+#  
+#  if (length(missing_pkgs) > 0) {
+#    message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
+#    install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
+#    message(">>> R packages installed successfully.")
+#  } else {
+#    message(">>> All R dependencies are present.")
+#  }
 
 library(GGIR)
 library(ActCR)
