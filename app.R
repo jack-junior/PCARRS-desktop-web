@@ -124,11 +124,17 @@ setup_python_env <- function(shiny_session = NULL) {
 if (file.exists("updater.R")) source("updater.R")
 
 ui <- page_navbar(
-  title = "GeneActiv Analysis Suite",
+  title = span(
+    tags$img(src = "app_icon.ico", style = "height:30px; margin-right:10px; vertical-align:middle;"),
+    "GeneActiv Analysis Suite"
+  ),
   theme = bs_theme(version = 5, bootswatch = "flatly"),
   shinyjs::useShinyjs(),
   
   header = tags$head(
+    # --- FAVICON (Onglet Navigateur) ---
+    tags$link(rel = "shortcut icon", href = "app_icon.ico"),
+    
     tags$style("
       
       
@@ -213,6 +219,16 @@ ui <- page_navbar(
         to { background-position: 0 0; }
       }
       
+      /* Ajustement pour que les logos de droite ne soient pas collés au bord */
+      .navbar-nav.ms-auto {
+        align-items: center;
+        margin-right: 15px;
+      }
+      .logo-right {
+        height: 40px; /* Ajuste la taille de tes logos ici */
+        margin-left: 15px;
+      }
+      
     "),
     
     tags$script(HTML("
@@ -225,7 +241,15 @@ ui <- page_navbar(
       // el.scrollTop = el.scrollHeight;
     }
   });
-"))
+")),
+    
+    # --- LOGOS À DROITE ---
+    # Le nav_spacer() pousse tout ce qui suit vers l'extrême droite
+    nav_spacer(),
+    
+    nav_item(tags$img(src = "logo1.png", class = "logo-right")),
+    nav_item(tags$img(src = "logo2.png", class = "logo-right")),
+    nav_item(tags$img(src = "logo3.png", class = "logo-right")),
     
     
    # tags$script("
