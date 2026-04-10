@@ -13,26 +13,26 @@ library(tidyverse)
 library(shinyWidgets) 
 library(shinyjs)
 
-#message("--- Checking R Dependencies ---")
+message("--- Checking R Dependencies ---")
 
-# # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
-# required_packages <- c(
-#   "shiny", "bslib", "httr", "shinyFiles", "yaml", 
-#   "tidyverse", "GGIR", "ActCR", "actilifecounts", 
-#   "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
-# )
-# 
-# 
-# installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
-# missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
-# 
-# if (length(missing_pkgs) > 0) {
-#   message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
-#   install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
-#   message(">>> R packages installed successfully.")
-# } else {
-#   message(">>> All R dependencies are present.")
-# }
+ # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
+ required_packages <- c(
+   "shiny", "bslib", "httr", "shinyFiles", "yaml", 
+   "tidyverse", "GGIR", "ActCR", "actilifecounts", 
+   "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
+ )
+ 
+ 
+ installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+ missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+ 
+ if (length(missing_pkgs) > 0) {
+   message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
+   install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
+   message(">>> R packages installed successfully.")
+ } else {
+   message(">>> All R dependencies are present.")
+ }
 
 library(GGIR)
 library(ActCR)
@@ -125,7 +125,7 @@ if (file.exists("updater.R")) source("updater.R")
 
 ui <- page_navbar(
   title = span(
-    tags$img(src = "app_icon.ico", style = "height:30px; margin-right:10px; vertical-align:middle;"),
+    tags$img(src = "logo.png", style = "height:50px; margin-right:10px; vertical-align:middle;"),
     "GeneActiv Analysis Suite"
   ),
   theme = bs_theme(version = 5, bootswatch = "flatly"),
@@ -225,7 +225,7 @@ ui <- page_navbar(
         margin-right: 15px;
       }
       .logo-right {
-        height: 40px; /* Ajuste la taille de tes logos ici */
+        height: 50px; 
         margin-left: 15px;
       }
       
@@ -243,13 +243,6 @@ ui <- page_navbar(
   });
 ")),
     
-    # --- LOGOS À DROITE ---
-    # Le nav_spacer() pousse tout ce qui suit vers l'extrême droite
-    nav_spacer(),
-    
-    nav_item(tags$img(src = "logo1.png", class = "logo-right")),
-    nav_item(tags$img(src = "logo2.png", class = "logo-right")),
-    nav_item(tags$img(src = "logo3.png", class = "logo-right")),
     
     
    # tags$script("
@@ -385,7 +378,14 @@ ui <- page_navbar(
                 span(textOutput("report_status_msg"), style = "margin-top:10px; color: #2c3e50; font-weight: bold;")
               )
             )
-  )
+  ),
+  # --- LOGOS À DROITE ---
+  # Le nav_spacer() pousse tout ce qui suit vers l'extrême droite
+  nav_spacer(),
+  
+  nav_item(tags$img(src = "logo1.png", class = "logo-right")),
+  nav_item(tags$img(src = "logo2.png", class = "logo-right")),
+  nav_item(tags$img(src = "logo3.png", class = "logo-right")),
 )
 
 
