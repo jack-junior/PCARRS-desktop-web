@@ -50,7 +50,8 @@ if (file.exists("updater.R")) {
 }
 
 # F. LAUNCH SHINY APP
-port <- 1234
+#port <- 1234
+port <- 3456
 url  <- paste0("http://127.0.0.1:", port)
 
 # Détection du navigateur avec priorité Chrome -> Edge -> Default

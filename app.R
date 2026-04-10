@@ -1,6 +1,6 @@
 # --- Gestion des chemins de librairie locale ---
 local_lib <- "resources/R_libs"
-if (!dir.exists(local_lib)) dir.create(local_lib, recursive = TRUE)
+# if (!dir.exists(local_lib)) dir.create(local_lib, recursive = TRUE)
 .libPaths(c(local_lib, .libPaths()))
 
 # --- Chargement des bibliothèques de base ---
@@ -13,26 +13,26 @@ library(tidyverse)
 library(shinyWidgets) 
 library(shinyjs)
 
-message("--- Checking R Dependencies ---")
+#message("--- Checking R Dependencies ---")
 
-# --- 1. AUTO-INSTALLER R (Vers dossier local) ---
-required_packages <- c(
-  "shiny", "bslib", "httr", "shinyFiles", "yaml", 
-  "tidyverse", "GGIR", "ActCR", "actilifecounts", 
-  "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
-)
-
-
-installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
-missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
-
-if (length(missing_pkgs) > 0) {
-  message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
-  install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
-  message(">>> R packages installed successfully.")
-} else {
-  message(">>> All R dependencies are present.")
-}
+# # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
+# required_packages <- c(
+#   "shiny", "bslib", "httr", "shinyFiles", "yaml", 
+#   "tidyverse", "GGIR", "ActCR", "actilifecounts", 
+#   "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
+# )
+# 
+# 
+# installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+# missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+# 
+# if (length(missing_pkgs) > 0) {
+#   message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
+#   install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
+#   message(">>> R packages installed successfully.")
+# } else {
+#   message(">>> All R dependencies are present.")
+# }
 
 library(GGIR)
 library(ActCR)
@@ -455,13 +455,14 @@ server <- function(input, output, session) {
     # We check the folder content
     env_exists <- dir.exists(py_env_path) && length(list.files(py_env_path)) > 0
     py_ready(env_exists) # Update our reactive state
+    lib_exists <- dir.exists(local_lib) && length(list.files(local_lib)) > 0 # Vérification simple
     
     status_msg <- c(
       sprintf("Current Time: %s", Sys.time()),
       "---------------------------",
       sprintf("[ %s ] Micromamba Engine", if(file.exists(mamba_exe)) "✅ READY"   else "❌ MISSING"),
       sprintf("[ %s ] Python Virtual Env", if(env_exists) "✅ READY" else "⚠️ MISSING"),
-      sprintf("[ %s ] R Local Libraries", if(length(missing_pkgs) == 0) "✅ READY" else "❌ MISSING"),
+      sprintf("[ %s ] R Local Libraries", if(lib_exists) "✅ READY" else "❌ MISSING"),
       "---------------------------"
     )
     if(!env_exists) status_msg <- c(status_msg, "ACTION: Please click 'Initialize Python Environment'")
@@ -705,6 +706,8 @@ server <- function(input, output, session) {
         log_msg("\n==========================================")
         log_msg("🎉 PIPELINE SUCCESSFULLY FINISHED")
         log_msg("==========================================")
+        # Dans le bloc du pipeline, à la fin :
+        shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = get_ready_ids())
         
       }, error = function(e) {
         log_msg("\n******************************************")
@@ -725,20 +728,6 @@ server <- function(input, output, session) {
   })
   
   # --- 7. REPORT GENERATION ---
-
-  # Dynamic list of ready IDs (based on the 'summaries' folder)
-  observe({
-   # invalidateLater(2000) # Refresh the list every 2 seconds
-    summary_path <- "summaries"
-    if (dir.exists(summary_path)) {
-      # Identify folders that contain at least one file (completed analysis)
-      dirs <- list.dirs(summary_path, full.names = FALSE, recursive = FALSE)
-      ready_ids <- dirs[sapply(dirs, function(d) length(list.files(file.path(summary_path, d))) > 0)]
-      
-      # Update the picker input in the UI
-      shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ready_ids)
-    }
-  })
   
   # Trigger when the "GENERATE SELECTED REPORTS" button is clicked
   observeEvent(input$gen_report_multi, {
@@ -811,6 +800,39 @@ server <- function(input, output, session) {
         }
       }
     })
+  })
+  
+  # --- LOGIQUE DU BOUTON REFRESH REPORTS ---
+  
+  # On crée une fonction réutilisable pour scanner les dossiers
+  get_ready_ids <- function() {
+    summary_path <- "summaries"
+    if (dir.exists(summary_path)) {
+      # On liste les dossiers (IDs) qui contiennent au moins un fichier
+      dirs <- list.dirs(summary_path, full.names = FALSE, recursive = FALSE)
+      ready_ids <- dirs[sapply(dirs, function(d) length(list.files(file.path(summary_path, d))) > 0)]
+      return(ready_ids)
+    }
+    return(character(0))
+  }
+  
+  # 1. Mise à jour au clic sur le bouton "Refresh List"
+  observeEvent(input$refresh_report_list, {
+    ids <- get_ready_ids()
+    
+    if (length(ids) > 0) {
+      shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
+      showNotification("List updated: Participants found.", type = "message")
+    } else {
+      shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = character(0))
+      showNotification("No completed analyses found in 'summaries/'.", type = "warning")
+    }
+  })
+  
+  # 2. Mise à jour automatique au démarrage de la session
+  observe({
+    ids <- get_ready_ids()
+    shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
   })
   
   
