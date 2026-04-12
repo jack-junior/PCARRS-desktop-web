@@ -64,30 +64,15 @@ def has_already_been_processed(bin_file: Path, output_root: Path) -> bool:
     file_stem = bin_file.stem
     per_file_output_dir = output_root / file_stem
     
-    if not per_file_output_dir.is_dir():
-        return False
-
-    # On vérifie si un fichier CSV (le résultat final) existe dans le dossier
-    # Stepcount génère souvent 'stepcount.csv' ou un fichier incluant le nom
-    results = list(per_file_output_dir.glob("*.csv"))
-    
-    if len(results) > 0:
-        # Optionnel : vérifier que le fichier n'est pas vide (0 octets)
-        return results[0].stat().st_size > 0
-        
-    return False
-    try:
-        any_item = next(per_file_output_dir.iterdir(), None)
-    except StopIteration:
-        any_item = None
-    return any_item is not None
+    done_flag = per_file_output_dir / "DONE.txt"
+    return done_flag.exists()
 
 def run_stepcount_on_file(bin_file: Path, output_root: Path):
     file_stem = bin_file.stem
     per_file_output_dir = output_root / file_stem
     per_file_output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"--- Processing: {bin_file.name} ---")
+    print(f"--- Processing: {bin_file.name} ---", flush=True)
     
     cmd = [
         sys.executable, "-m", "stepcount.stepcount", 
@@ -96,20 +81,25 @@ def run_stepcount_on_file(bin_file: Path, output_root: Path):
     ]
     
     result = subprocess.run(
-        cmd, 
-        capture_output=True, 
-        text=True, 
-        encoding="utf-8", 
-        errors="ignore"
+        cmd,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        text=True
     )
-
-    if result.returncode != 0:
-        print(f"RESULT: FAILED for {bin_file.name}")
-        print(f"ERROR: {result.stderr}") 
-        return False
     
-    print(f"RESULT: SUCCESS for {bin_file.name}")
+    if result.returncode != 0:
+        print(f"RESULT: FAILED for {bin_file.name}", flush=True)
+        return False
+
+    # SUCCESS
+    print(f"RESULT: SUCCESS for {bin_file.name}", flush=True)
+    
+    done_flag = per_file_output_dir / "DONE.txt"
+    done_flag.write_text("completed")
+    
     return True
+    
+    
 
 # ------------------------------------
 # MAIN
@@ -134,8 +124,11 @@ def main():
     for bin_file in bin_files:
         # If user selected specific IDs, we RE-PROCESS (overwrite) instead of skipping XX
         #if not target_ids and has_already_been_processed(bin_file, OUTPUT_ROOT):
+        print(f"Checking: {bin_file.name}", flush=True)
+
         if has_already_been_processed(bin_file, OUTPUT_ROOT):
             skipped_count += 1
+            print(f"Skipping already processed: {bin_file.name}", flush=True)
             continue
 
         success = run_stepcount_on_file(bin_file, OUTPUT_ROOT)
@@ -145,7 +138,7 @@ def main():
             failed_count += 1
 
     print("\n" + "="*30)
-    print("STEPCOUNT EXECUTION SUMMARY")
+    print("STEPCOUNT EXECUTION SUMMARY", flush=True)
     print(f"Total Files Handled: {total_files}")
     print(f"Successfully Done:   {processed_count}")
     print(f"Skipped (Existing):  {skipped_count}")

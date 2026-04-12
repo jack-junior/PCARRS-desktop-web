@@ -9,6 +9,8 @@ library(readxl)
 library(doconv)
 library(yaml) # Ajouté pour lire le config.yml
 
+
+
 # --- SÉCURITÉ SHINY ---
 if (!exists("target_id")) {
   stop("clean_target_id is missing. This script must be run from the Shiny App.")
@@ -18,7 +20,7 @@ cfg <- yaml::read_yaml("config.yml")
 
 # Chemins basés sur config.yml
 path_data  <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
-path_demo <- file.path("data", "participant_info", "participant_english.xlsx")
+path_demo <- cfg$paths$participant_files$en
 path_img   <- "resources/images"
 path_logo1 <- file.path(path_img, "logo1.png")
 path_logo2 <- file.path(path_img, "logo2.png")
@@ -45,7 +47,14 @@ fp_subtitle <- fp_text(font.size = 16, bold = TRUE, color = col_primary)
 # 1.a DATA PREPARATION
 # =====================================================
 # Clean TARGET_ID
+print("DEBUG BEFORE CLEAN")
+print(target_id)
+print(length(target_id))
+
 clean_target_id <- substr(trimws(target_id), 1, 6)
+
+print("DEBUG AFTER CLEAN")
+print(clean_target_id)
 
 # --- DATA PREPARATION CIBLÉE ---
 data_metrics <- read_csv(path_data, show_col_types = FALSE) %>%
@@ -95,10 +104,20 @@ convert_to_hours_dec <- function(x) {
 # =====================================================
 # 3. REPORT GENERATION FUNCTION
 # =====================================================
-generate_officer_report <- function(pid, data_full, template_path) {
+
+generate_officer_report <- function(pid, data_full) {
+  
 
   # Filter data for the specific participant
-  person <- data_full %>% filter(subject == pid)
+  person <- data_full
+  
+  print("STRUCTURE PERSON:")
+  print(str(person))
+  
+  if (is.null(person) || nrow(person) == 0) {
+    stop(paste("No data found for participant:", pid))
+  }
+  
 
   # --- LOGOS PREPARATION ---
   img1 <- external_img(src = path_logo1, width = 0.6, height = 0.7)
@@ -122,6 +141,9 @@ generate_officer_report <- function(pid, data_full, template_path) {
                        person$software_sleep_day5_hhmm, person$software_sleep_day6_hhmm,
                        person$software_sleep_day7_hhmm)
   sleep_vec <- sapply(sleep_hhmm_list, convert_to_hours_dec)
+  
+  steps_vec[is.na(steps_vec)] <- 0
+  sleep_vec[is.na(sleep_vec)] <- 0
 
   # --- FORMAT DATES ---
   start_dt <- format(as.Date(person$data_start_time[1]), "%d %b %Y")

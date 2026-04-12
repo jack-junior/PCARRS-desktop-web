@@ -31,24 +31,79 @@ get_daily_activity = function(GGIR_output = cfg$paths$ggir_output){
   
   # 3. On cherche le fichier part5_daysummary (le nom change selon les seuils)
   all_files <- list.files(qc_dir, full.names = TRUE)
-  filename <- all_files[grep("part5_daysummary", all_files)][1] # On prend le premier trouvé
   
-  if (is.na(filename) || !file.exists(filename)) {
-    stop("Rapport part5_daysummary introuvable dans : ", qc_dir)
+  candidates <- all_files[grep("part5_daysummary_full", all_files)]
+  
+  if (length(candidates) == 0) {
+    stop("Aucun fichier 'part5_daysummary_full' trouvé dans : ", qc_dir)
   }
   
-  message("--- Extraction des données depuis : ", basename(filename), " ---")
+  # éviter fichiers vides
+  candidates <- candidates[file.size(candidates) > 0]
+  
+  if (length(candidates) == 0) {
+    stop("Fichiers 'part5_daysummary_full' trouvés mais vides")
+  }
+  
+  filename <- candidates[1]
+  
+  log_msg(paste(">>> Using GGIR file:", basename(filename)))
+  
+  log_msg(paste("--- Data Extraction from :", basename(filename), "---"))
   
   # =============================
   # 2. PROCESSING DATA
   # =============================
-  activity_df = read_csv(filename, show_col_types = FALSE) %>%
-    mutate(ActiveDuration = dur_day_min - dur_day_total_IN_min,
-           MVPADuration = dur_day_total_MOD_min + dur_day_total_VIG_min,
-           ActivityIntensity = ACC_day_mg - ACC_day_total_IN_mg,
-           ActiveVolume = ActivityIntensity * ActiveDuration,
-           ActiveBoutCount = Nblocks_day_total_LIG + Nblocks_day_total_MOD + Nblocks_day_total_VIG,
-           id = str_sub(ID, 1, 6)
+  activity_df_raw <- read_csv(filename, show_col_types = FALSE)
+  if (nrow(activity_df_raw) == 0) {
+    stop("GGIR file loaded but contains 0 rows")
+  }
+  
+  log_msg(paste(">>> Rows loaded:", nrow(activity_df_raw)))
+  log_msg(paste(">>> Columns:", paste(names(activity_df_raw), collapse=", ")))
+  
+  # =============================
+  # VALIDATION COLONNES (AVANT PIPELINE)
+  # =============================
+  required_cols <- c(
+    "dur_day_min",
+    "dur_day_total_IN_min",
+    "dur_day_total_MOD_min",
+    "dur_day_total_VIG_min",
+    "ACC_day_mg",
+    "ACC_day_total_IN_mg",
+    "Nblocks_day_total_LIG",
+    "Nblocks_day_total_MOD",
+    "Nblocks_day_total_VIG",
+    "FRAG_CoV_dur_IN_day",
+    "FRAG_CoV_dur_PA_day",
+    "ID",
+    "weekday",
+    "calendar_date"
+  )
+  
+  missing_cols <- setdiff(required_cols, names(activity_df_raw))
+  
+  if (length(missing_cols) > 0) {
+    stop(paste("Missing columns in GGIR output:", paste(missing_cols, collapse=", ")))
+  }
+  
+  if (!"GGIRversion" %in% names(activity_df_raw)) {
+    activity_df_raw$GGIRversion <- NA
+    log_msg(">>> GGIRversion column missing → filled with NA")
+  }
+  
+  # =============================
+  # PIPELINE
+  # =============================
+  activity_df = activity_df_raw %>%
+    mutate(
+      ActiveDuration = dur_day_min - dur_day_total_IN_min,
+      MVPADuration = dur_day_total_MOD_min + dur_day_total_VIG_min,
+      ActivityIntensity = ACC_day_mg - ACC_day_total_IN_mg,
+      ActiveVolume = ActivityIntensity * ActiveDuration,
+      ActiveBoutCount = Nblocks_day_total_LIG + Nblocks_day_total_MOD + Nblocks_day_total_VIG,
+      id = str_sub(ID, 1, 6)
     ) %>%
     rename(InactiveDuration = dur_day_total_IN_min,
            LightActivityDuration = dur_day_total_LIG_min,
@@ -68,7 +123,7 @@ get_daily_activity = function(GGIR_output = cfg$paths$ggir_output){
   if(!dir.exists(cfg$paths$summaries)) dir.create(cfg$paths$summaries, recursive = TRUE)
   
   write_csv(activity_df, file = output_path)
-  message("Succès : activity_metrics.csv généré dans ", cfg$paths$summaries)
+  log_msg(paste("Success: activity_metrics.csv generated in", cfg$paths$summaries))
   
   return(activity_df)
 }

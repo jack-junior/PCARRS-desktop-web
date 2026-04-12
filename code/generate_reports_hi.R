@@ -18,7 +18,7 @@ cfg <- yaml::read_yaml("config.yml")
 
 # Chemins basés sur config.yml
 path_data  <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
-path_demo <- file.path("data", "participant_info", "participant_hindi.xlsx")
+path_demo <- cfg$paths$participant_files$hi
 path_img   <- "resources/images"
 path_logo1 <- file.path(path_img, "logo1.png")
 path_logo2 <- file.path(path_img, "logo2.png")
@@ -94,10 +94,16 @@ convert_to_hours_dec <- function(x) {
 # =====================================================
 # 3. REPORT GENERATION FUNCTION
 # =====================================================
-generate_officer_report <- function(pid, data_full, template_path) {
+generate_officer_report <- function(pid, data_full) {
+  
 
   # Filter data for the specific participant
-  person <- data_full %>% filter(subject == pid)
+  person <- data_full 
+  
+  if (is.null(person) || nrow(person) == 0) {
+    stop(paste("No data found for participant:", pid))
+  }
+
 
   # --- LOGOS PREPARATION ---
   img1 <- external_img(src = path_logo1, width = 0.6, height = 0.7)
@@ -121,6 +127,9 @@ generate_officer_report <- function(pid, data_full, template_path) {
                        person$software_sleep_day5_hhmm, person$software_sleep_day6_hhmm,
                        person$software_sleep_day7_hhmm)
   sleep_vec <- sapply(sleep_hhmm_list, convert_to_hours_dec)
+  
+  steps_vec[is.na(steps_vec)] <- 0
+  sleep_vec[is.na(sleep_vec)] <- 0
 
   # --- FORMAT DATES ---
   start_dt <- format(as.Date(person$data_start_time[1]), "%d %b %Y")

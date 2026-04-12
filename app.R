@@ -12,27 +12,58 @@ library(yaml)
 library(tidyverse) 
 library(shinyWidgets) 
 library(shinyjs)
+library(processx)
 
-# message("--- Checking R Dependencies ---")
+
+ message("--- Checking R Dependencies ---")
 # 
 #  # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
-#  required_packages <- c(
-#    "shiny", "bslib", "httr", "shinyFiles", "yaml", 
-#    "tidyverse", "GGIR", "ActCR", "actilifecounts", 
-#    "shinyWidgets", "shinycssloaders", "flextable", "shinyjs", "shinyFiles", "officer", "doconv", "readxl", "R6", "jsonlite", "curl", "digest", "readxl"
-#  )
-#  
-#  
-#  installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
-#  missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
-#  
-#  if (length(missing_pkgs) > 0) {
-#    message(">>> Installing missing R packages to local library: ", paste(missing_pkgs, collapse=", "))
-#    install.packages(missing_pkgs, lib = local_lib, repos = "https://cloud.r-project.org")
-#    message(">>> R packages installed successfully.")
-#  } else {
-#    message(">>> All R dependencies are present.")
-#  }
+  required_packages <- c(
+    # --- SHINY UI ---
+    "shiny", "bslib", "shinyWidgets", "shinyjs", "shinycssloaders", "shinyFiles",
+    
+    # --- DATA / MANIPULATION ---
+    "tidyverse", "dplyr", "readr", "tibble", "stringr", "lubridate",
+    "janitor",
+    
+    # --- VISUALIZATION ---
+    "ggplot2", "scales",
+    
+    # --- GGIR + ACTIVITY ---
+    "GGIR", "ActCR", "actilifecounts",
+    
+    # --- REPORTING ---
+    "officer", "flextable", "doconv",
+    
+    # --- FILE I/O ---
+    "readxl", "writexl",
+    
+    # --- CONFIG / SYSTEM ---
+    "yaml", "processx", "R6", "jsonlite", "httr", "curl", "digest",
+    
+    # --- GRAPHICS ENGINE (CRITICAL FIX) ---
+    "ragg", "systemfonts", "textshaping",
+    
+    # --- DATE/TIME + HMS ---
+    "hms",
+    
+    # --- OPTIONAL BUT SAFE ---
+    "here"
+  )
+  
+  
+  installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+  missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+  
+  installed <- installed.packages(lib.loc = local_lib)[, "Package"]
+  
+  if (!all(required_packages %in% installed)) {
+    stop("Missing required packages. Please reinstall environment.")
+  
+  } else {
+    message(">>> All R dependencies are present.")
+  }
+  
 
 library(GGIR)
 library(ActCR)
@@ -178,7 +209,7 @@ ui <- page_navbar(
       }
       
       /* 2. Style Terminal (60% de l'écran) */
-      #log_console { 
+      #log_console_js { 
         height: 60vh !important; 
         background: #1e1e1e !important; 
         color: #00ff00 !important; 
@@ -235,13 +266,15 @@ ui <- page_navbar(
   Shiny.addCustomMessageHandler('update_log', function(message) {
     var el = document.getElementById('log_console_js');
     if (el) {
-      // On met à jour uniquement le contenu texte
-      el.textContent = message.text.split('\n').slice(-100).join('\n') + (message.cursor ? ' █' : ' _');
-      // Auto-scroll fluide
-      // el.scrollTop = el.scrollHeight;
+      // On met à jour le contenu
+      el.innerText = message.text + (message.cursor ? ' █' : ' _');
+      
+      // AUTO-SCROLL : On force le scroll vers le bas à chaque mise à jour
+      el.scrollTop = el.scrollHeight;
     }
   });
 ")),
+    
     
     
     
@@ -396,6 +429,8 @@ server <- function(input, output, session) {
     q("no") # Ferme proprement R
   })
   
+
+  
   # --- 1. DIRECTORY SELECTION LOGIC ---
   # Get available drives (C:, D:, etc. on Windows / Volumes on Mac)
   roots <- getVolumes()()
@@ -429,13 +464,14 @@ server <- function(input, output, session) {
         sleep_data = sleep_path,
         participant_folder = part_dir,
         participant_files = list(
-          en = file.path(part_dir, "participants_en.csv"),
-          ta = file.path(part_dir, "participants_ta.csv"),
-          hi = file.path(part_dir, "participants_hi.csv")
+          en = file.path(part_dir, "participants_en.xlsx"),
+          ta = file.path(part_dir, "participants_ta.xlsx"),
+          hi = file.path(part_dir, "participants_hi.xlsx")
         ),
         img_folder = "resources/images",
         summaries = "summaries",
-        ggir_output = "GGIR"
+        ggir_output = "GGIR",
+        reports= "reports"
       )
     )
     
@@ -445,6 +481,7 @@ server <- function(input, output, session) {
     # Ensure output directories exist
     if(!dir.exists("summaries")) dir.create("summaries")
     if(!dir.exists("GGIR")) dir.create("GGIR")
+    if(!dir.exists("reports")) dir.create("reports")
     
     showNotification("Configuration Saved Successfully!", type = "default")
   })
@@ -526,7 +563,7 @@ server <- function(input, output, session) {
       # Force the trigger to change so that output$sys_status updates
       check_trigger(check_trigger() + 1) 
       py_ready(TRUE) # Force state to TRUE
-      showNotification("Python is ready!", type = "message")
+      showNotification("Python is ready!", type = "default")
     }
   })
   
@@ -555,21 +592,19 @@ server <- function(input, output, session) {
   # This polls the log file for changes every 2 seconds
   
   # --- LOGGING ENGINE CORRIGÉ ---
-  # Logique de lecture du fichier (sans clignotement UI)
   observe({
-    invalidateLater(800) # Fréquence de rafraîchissement (800ms)
+    invalidateLater(800)
     
-    # 1. Lire le fichier
-    log_text <- if (file.exists("pipeline_log.txt")) {
-      paste(readLines("pipeline_log.txt", warn = FALSE), collapse = "\n")
-    } else {
-      "💻 Console ready. Awaiting system log..."
+    log_path <- "pipeline_log.txt"
+    
+    # Si le fichier n'existe pas, on le crée avec le message par défaut
+    if (!file.exists(log_path)) {
+      writeLines("💻 Console ready. Awaiting system log...", log_path)
     }
     
-    # 2. Gérer le curseur
+    log_text <- paste(readLines(log_path, warn = FALSE), collapse = "\n")
     show_cursor <- as.numeric(Sys.time()) %% 1.6 < 0.8
     
-    # 3. Envoyer au JavaScript
     session$sendCustomMessage("update_log", list(
       text = log_text,
       cursor = show_cursor
@@ -591,11 +626,47 @@ server <- function(input, output, session) {
     }
   })
   
+  
+  
+  # Track error
+  run_step <- function(step_name, expr, check = NULL, log_msg) {
+    
+    log_msg(paste0("\n🔹 START: ", step_name))
+    start_time <- Sys.time()
+    
+    result <- tryCatch({
+      
+      eval(expr, envir = parent.frame())
+      
+      if (!is.null(check)) {
+        check_ok <- check()
+        if (!check_ok) {
+          stop(paste("Validation failed for", step_name))
+        }
+      }
+      
+      TRUE
+      
+    }, error = function(e) {
+      log_msg(paste0("❌ ERROR in ", step_name, ": ", e$message))
+      return(FALSE)
+    })
+    
+    duration <- round(difftime(Sys.time(), start_time, units = "secs"), 2)
+    
+    if (result) {
+      log_msg(paste0("✅ SUCCESS: ", step_name, " (", duration, " sec)"))
+    } else {
+      stop(paste("Pipeline stopped at:", step_name))
+    }
+  }
+  
+  
   # --- 6. MAIN PIPELINE EXECUTION (UPDATED) ---
   observeEvent(input$run_full_pipeline, {
     
     # Notification de démarrage
-    showNotification("🚀 Analysis Started", type = "default", duration = 5)
+    showNotification("🚀 Analysis Started", type = "message", duration = 5)
     
     # Variables globales pour les sous-scripts
     selected_filenames <<- if(input$run_mode == "selective") input$selected_files else NULL
@@ -608,8 +679,8 @@ server <- function(input, output, session) {
       
       con <- file(log_file, open = "wt")
       
-      sink(con, type = "default")
-      sink(con, type = "output")
+      #sink(con, type = "message")
+      #sink(con, type = "output")
       
       log_msg <- function(msg) {
         cat(msg, "\n")
@@ -622,6 +693,7 @@ server <- function(input, output, session) {
       
       
       tryCatch({
+        
         log_msg("==========================================")
         log_msg(paste("🚀 PIPELINE STARTED -", Sys.time()))
         log_msg(paste("Mode:", toupper(input$run_mode)))
@@ -629,24 +701,7 @@ server <- function(input, output, session) {
         
         # --- RÉSOLUTION DES CHEMINS ---
         suffix <- if(Sys.info()['sysname'] == "Windows") "python.exe" else "bin/python"
-        # Chemin correct pour un venv Python sur Windows
-        full_py_path <- normalizePath(
-          file.path(getwd(), "resources", "python_env", "Scripts", "python.exe"), 
-          mustWork = FALSE
-        )
         
-        # STEP 1: GGIR
-        setProgress(0.1, detail = "Step 1: Analyzing movement (GGIR)...")
-        log_msg("📂 STEP 1/5: Running GGIR Analysis...")
-        source("code/run_GGIR.R", local = TRUE)
-        log_msg("✅ GGIR Analysis complete.")
-        flush(con)
-        Sys.sleep(0.5)        
-        # STEP 2: PYTHON STEPCOUNT
-        setProgress(0.3, detail = "Step 2: Calculating daily steps...")
-        log_msg("\n📂 STEP 2/5: Running Stepcount (Python)...")
-        
-        # --- DÉTECTION DYNAMIQUE DU PYTHON ---
         path_root <- file.path(getwd(), "resources", "python_env", "python.exe")
         path_scripts <- file.path(getwd(), "resources", "python_env", "Scripts", "python.exe")
         
@@ -658,98 +713,217 @@ server <- function(input, output, session) {
           NULL
         }
         
-        if (is.null(full_py_path)) {
-          log_msg("❌ ERROR: Python environment not found. Please run 'System Setup' first.")
-        } else {
-          log_msg(paste(">>> Using Python at:", full_py_path))
-          py_script <- normalizePath("code/get_steps.py")
-          
-          # Prépare les arguments
-          args <- c(shQuote(py_script))
-          
-          if (!is.null(selected_filenames)) {
-            ids_only <- basename(selected_filenames)
-            ids_only <- gsub("\\.(bin|BIN)$", "", ids_only)
-            
-            ids_str <- paste(ids_only, collapse=",")
-            args <- c(args, "--ids", shQuote(ids_str))
-            
-            message(">>> IDs sent to Python: ", ids_str)
-          }
-          
-          # Exécution avec le chemin détecté
-          #system(paste(shQuote(full_py_path), paste(args, collapse=" ")))
-          cmd_python <- paste(shQuote(full_py_path), paste(args, collapse=" "), ">> pipeline_log.txt 2>&1")
-          
-          log_msg(">>> Python is running in background, check below for updates...")
-          
-          # Exécution
-          system(cmd_python, wait = TRUE)
-          log_msg("✅ Step calculation complete.")
-          flush(con)
-          Sys.sleep(0.5)
-        }
+        # =========================================================
+        # STEP 1 — GGIR
+        # =========================================================
+        setProgress(0.1, detail = "Step 1: Analyzing movement (GGIR)...")
         
-        # STEP 3: METRICS EXTRACTION
-        setProgress(0.5, detail = "Step 3: Organizing activity data...")
-        log_msg("\n📂 STEP 3/5: Extracting calculated metrics...")
-        source("code/extract_step_metrics.R", local = TRUE)
-        source("code/extract_activity_metrics.R", local = TRUE)
-        log_msg("✅ Metrics extracted.")
-        flush(con)
+        run_step(
+          "GGIR Analysis",
+          quote(source("code/run_GGIR.R", local = TRUE)),
+          check = function() {
+            dir.exists("GGIR")
+          },
+          log_msg = log_msg
+        )
+        
         Sys.sleep(0.5)
         
-        # STEP 4: DATA INTEGRATION
-        setProgress(0.7, detail = "Step 4: Merging all data sources...")
-        log_msg("\n📂 STEP 4/5: Integrating all results...")
+        # =========================================================
+        # STEP 2 — PYTHON STEPCOUNT
+        # =========================================================
+        setProgress(0.3, detail = "Step 2: Calculating daily steps...")
         
-        act_file <- "summaries/activity_metrics.csv"
-        stp_file <- "summaries/step_metrics.csv"
-        
-        if(file.exists(act_file) && file.exists(stp_file)) {
-          activity <- read_csv(act_file, show_col_types = FALSE)
-          steps    <- read_csv(stp_file, show_col_types = FALSE)
-          
-          # Fusion sécurisée
-          combined <- left_join(steps, activity, by = c("subject", "calendar_date"))
-          write_csv(combined, act_file)
-          log_msg("✅ Data successfully merged.")
-        } else {
-          log_msg("⚠️ One or more metric files missing. Integration skipped.")
+        if (is.null(full_py_path)) {
+          stop("Python environment not found. Please run System Setup first.")
         }
+        full_py_path_local <- full_py_path
+        selected_filenames_local <- selected_filenames
         
-        # STEP 5: FINAL REPORTS
+        run_step(
+          "Stepcount (Python)",
+          quote({
+            
+            log_msg(paste(">>> Using Python at:", full_py_path_local))
+            
+            py_script <- normalizePath("code/get_steps.py")
+            args <- c(py_script)
+            
+            if (!is.null(selected_filenames_local)) {
+              ids_only <- basename(selected_filenames_local)
+              ids_only <- gsub("\\.(bin|BIN)$", "", ids_only)
+              
+              ids_str <- paste(ids_only, collapse=",")
+              args <- c(args, "--ids", ids_str)
+              
+              log_msg(paste(">>> IDs sent to Python:", ids_str))
+            }
+            
+            log_msg(">>> Running Python stepcount...")
+            
+            px <- process$new(
+              command = full_py_path_local,
+              args = args,
+              stdout = "|",
+              stderr = "|"
+            )
+            
+            counter <- 0
+            while (px$is_alive()) {
+              
+              out <- px$read_output_lines()
+              err <- px$read_error_lines()
+              
+              if (length(out) > 0) {
+                for (line in out) log_msg(line)
+              }
+              
+              if (length(err) > 0) {
+                for (line in err) log_msg(paste("⚠️", line))
+              }
+              
+              counter <- counter + 1
+              if (counter %% 10 == 0) {
+                log_msg("...still processing stepcount...")
+              }
+              
+              Sys.sleep(0.2)
+            }
+            
+            exit_code <- px$get_exit_status()
+            
+            if (!is.null(exit_code) && exit_code != 0) {
+              stop("Python stepcount failed")
+            }
+            
+          }),
+          check = function() {
+            length(list.dirs("summaries", recursive = FALSE)) > 0
+          },
+          log_msg = log_msg
+        )
+        
+        Sys.sleep(0.5)
+        
+        # =========================================================
+        # STEP 3 — METRICS EXTRACTION
+        # =========================================================
+        setProgress(0.5, detail = "Step 3: Organizing activity data...")
+        
+        run_step(
+          "Extract Step Metrics",
+          quote(source("code/extract_step_metrics.R", local = TRUE)),
+          check = function() {
+            file.exists("summaries/step_metrics.csv")
+          },
+          log_msg = log_msg
+        )
+        
+        run_step(
+          "Extract Activity Metrics",
+          #quote(source("code/extract_activity_metrics.R", local = TRUE)),
+          quote({
+            tryCatch({
+              source("code/extract_activity_metrics.R", local = TRUE)
+            }, error = function(e) {
+              stop(paste("extract_activity_metrics failed:", e$message))
+            })
+          }),
+          check = function() {
+            file.exists("summaries/activity_metrics.csv")
+          },
+          log_msg = log_msg
+        )
+        
+        Sys.sleep(0.5)
+        
+        # =========================================================
+        # STEP 4 — DATA INTEGRATION (TON CODE CONSERVÉ)
+        # =========================================================
+        setProgress(0.7, detail = "Step 4: Merging all data sources...")
+        
+        run_step(
+          "Merge Activity + Steps (App Layer)",
+          quote({
+            act_file <- "summaries/activity_metrics.csv"
+            stp_file <- "summaries/step_metrics.csv"
+            
+            if(file.exists(act_file) && file.exists(stp_file)) {
+              activity <- read_csv(act_file, show_col_types = FALSE)
+              steps    <- read_csv(stp_file, show_col_types = FALSE)
+              
+              combined <- left_join(steps, activity, by = c("subject", "calendar_date"))
+              write_csv(combined, act_file)
+              
+              log_msg("✅ Data successfully merged.")
+            } else {
+              stop("Missing activity_metrics.csv or step_metrics.csv")
+            }
+          }),
+          check = function() {
+            file.exists("summaries/activity_metrics.csv")
+          },
+          log_msg = log_msg
+        )
+        
+        # =========================================================
+        # STEP 5 — FINAL SUMMARIES
+        # =========================================================
         setProgress(0.8, detail = "Step 5: Finalizing summaries...")
-        log_msg("\n📂 STEP 5/5: Finalizing summaries and sleep logs...")
         
-        # Utilisation de try() pour éviter que le pipeline crash si un script de fin échoue
-        try(source("code/person_summary.R", local = TRUE))
-        try(source("code/extract_software_sleep.R", local = TRUE))
-        try(source("code/combine_geneactiv_metrics.R", local = TRUE))
+        run_step(
+          "Person Summary",
+          quote(source("code/person_summary.R", local = TRUE)),
+          check = function() {
+            file.exists("summaries/person_summary.csv")
+          },
+          log_msg = log_msg
+        )
+        
+        run_step(
+          "Extract Sleep Metrics",
+          quote(source("code/extract_software_sleep.R", local = TRUE)),
+          check = function() {
+            file.exists("summaries/software_sleep_metrics.csv")
+          },
+          log_msg = log_msg
+        )
+        
+        run_step(
+          "Combine GeneActiv Metrics",
+          quote(source("code/combine_geneactiv_metrics.R", local = TRUE)),
+          check = function() {
+            file.exists("summaries/geneactiv_combined_metrics.csv")
+          },
+          log_msg = log_msg
+        )
         
         log_msg("\n==========================================")
         log_msg("🎉 PIPELINE SUCCESSFULLY FINISHED")
         log_msg("==========================================")
-        # Dans le bloc du pipeline, à la fin :
-        shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = get_ready_ids())
         
       }, error = function(e) {
+        
         log_msg("\n******************************************")
         log_msg("❌ CRITICAL ERROR DETECTED")
         log_msg(paste("Error Details:", e$message))
         log_msg("******************************************")
+        
       }, finally = {
-        # Libération systématique des flux
-        sink(type = "default")
-        sink(type = "output")
+        
         if (isOpen(con)) close(con)
+        
       })
       
       setProgress(1)
     })
+    # Mise à jour de la liste des IDs pour les rapports
+    shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = get_ready_ids())
     
-    showNotification("✅ Pipeline Finished", type = "default")
+    showNotification("✅ Pipeline Finished", type = "message")
   })
+    
+   
   
   # --- 7. REPORT GENERATION ---
   
@@ -830,14 +1004,51 @@ server <- function(input, output, session) {
   
   # On crée une fonction réutilisable pour scanner les dossiers
   get_ready_ids <- function() {
-    summary_path <- "summaries"
-    if (dir.exists(summary_path)) {
-      # On liste les dossiers (IDs) qui contiennent au moins un fichier
-      dirs <- list.dirs(summary_path, full.names = FALSE, recursive = FALSE)
-      ready_ids <- dirs[sapply(dirs, function(d) length(list.files(file.path(summary_path, d))) > 0)]
-      return(ready_ids)
+    
+    file <- file.path("summaries", "geneactiv_combined_metrics.csv")
+    
+    # 1. Check existence
+    if (!file.exists(file)) return(character(0))
+    
+    # 2. Read safely
+    df <- tryCatch({
+      read.csv(file)
+    }, error = function(e) {
+      return(NULL)
+    })
+    
+    if (is.null(df)) return(character(0))
+    
+    # 3. Check required columns
+    required_cols <- c("subject", "valid_7days_activity")
+    
+    if (!all(required_cols %in% names(df))) return(character(0))
+    
+    # 4. Normalize valid column (robust)
+    valid_flag <- df$valid_7days_activity
+    
+    valid_flag <- if (is.logical(valid_flag)) {
+      valid_flag
+    } else if (is.numeric(valid_flag)) {
+      valid_flag == 1
+    } else {
+      tolower(as.character(valid_flag)) == "true"
     }
-    return(character(0))
+    
+    # 5. Filter valid participants
+    df_valid <- df[valid_flag, ]
+    
+    # 6. Extract unique IDs
+    ids <- unique(df_valid$subject)
+    
+    # 7. Clean
+    ids <- as.character(ids)
+    ids <- ids[!is.na(ids) & ids != ""]
+    
+    # 8. Sort (UX)
+    ids <- sort(ids)
+    
+    return(ids)
   }
   
   # 1. Mise à jour au clic sur le bouton "Refresh List"
@@ -846,7 +1057,7 @@ server <- function(input, output, session) {
     
     if (length(ids) > 0) {
       shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
-      showNotification("List updated: Participants found.", type = "message")
+      showNotification("List updated: Participants found.", type = "default")
     } else {
       shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = character(0))
       showNotification("No completed analyses found in 'summaries/'.", type = "warning")
