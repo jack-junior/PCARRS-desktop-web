@@ -52,8 +52,8 @@ required_packages <- c(
 )
 
 
-installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
-missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+#installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+#missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
 
 installed <- installed.packages(lib.loc = local_lib)[, "Package"]
 
