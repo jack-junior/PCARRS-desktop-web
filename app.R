@@ -15,54 +15,54 @@ library(shinyjs)
 library(processx)
 
 
-message("--- Checking R Dependencies ---")
+# message("--- Checking R Dependencies ---")
+# # 
+# #  # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
+# required_packages <- c(
+#   # --- SHINY UI ---
+#   "shiny", "bslib", "shinyWidgets", "shinyjs", "shinycssloaders", "shinyFiles",
+#   
+#   # --- DATA / MANIPULATION ---
+#   "tidyverse", "dplyr", "readr", "tibble", "stringr", "lubridate",
+#   "janitor",
+#   
+#   # --- VISUALIZATION ---
+#   "ggplot2", "scales",
+#   
+#   # --- GGIR + ACTIVITY ---
+#   "GGIR", "ActCR", "actilifecounts",
+#   
+#   # --- REPORTING ---
+#   "officer", "flextable", "doconv",
+#   
+#   # --- FILE I/O ---
+#   "readxl", "writexl",
+#   
+#   # --- CONFIG / SYSTEM ---
+#   "yaml", "processx", "R6", "jsonlite", "httr", "curl", "digest",
+#   
+#   # --- GRAPHICS ENGINE (CRITICAL FIX) ---
+#   "ragg", "systemfonts", "textshaping",
+#   
+#   # --- DATE/TIME + HMS ---
+#   "hms",
+#   
+#   # --- OPTIONAL BUT SAFE ---
+#   "here"
+# )
 # 
-#  # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
-required_packages <- c(
-  # --- SHINY UI ---
-  "shiny", "bslib", "shinyWidgets", "shinyjs", "shinycssloaders", "shinyFiles",
-  
-  # --- DATA / MANIPULATION ---
-  "tidyverse", "dplyr", "readr", "tibble", "stringr", "lubridate",
-  "janitor",
-  
-  # --- VISUALIZATION ---
-  "ggplot2", "scales",
-  
-  # --- GGIR + ACTIVITY ---
-  "GGIR", "ActCR", "actilifecounts",
-  
-  # --- REPORTING ---
-  "officer", "flextable", "doconv",
-  
-  # --- FILE I/O ---
-  "readxl", "writexl",
-  
-  # --- CONFIG / SYSTEM ---
-  "yaml", "processx", "R6", "jsonlite", "httr", "curl", "digest",
-  
-  # --- GRAPHICS ENGINE (CRITICAL FIX) ---
-  "ragg", "systemfonts", "textshaping",
-  
-  # --- DATE/TIME + HMS ---
-  "hms",
-  
-  # --- OPTIONAL BUT SAFE ---
-  "here"
-)
-
-
-#installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
-#missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
-
-installed <- installed.packages(lib.loc = local_lib)[, "Package"]
-
-if (!all(required_packages %in% installed)) {
-  stop("Missing required packages. Please reinstall environment.")
-  
-} else {
-  message(">>> All R dependencies are present.")
-}
+# 
+# #installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+# #missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+# 
+# installed <- installed.packages(lib.loc = local_lib)[, "Package"]
+# 
+# if (!all(required_packages %in% installed)) {
+#   stop("Missing required packages. Please reinstall environment.")
+#   
+# } else {
+#   message(">>> All R dependencies are present.")
+# }
 
 
 library(GGIR)
