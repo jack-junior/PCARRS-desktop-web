@@ -15,55 +15,55 @@ library(shinyjs)
 library(processx)
 
 
- message("--- Checking R Dependencies ---")
+message("--- Checking R Dependencies ---")
 # 
 #  # --- 1. AUTO-INSTALLER R (Vers dossier local) ---
-  required_packages <- c(
-    # --- SHINY UI ---
-    "shiny", "bslib", "shinyWidgets", "shinyjs", "shinycssloaders", "shinyFiles",
-    
-    # --- DATA / MANIPULATION ---
-    "tidyverse", "dplyr", "readr", "tibble", "stringr", "lubridate",
-    "janitor",
-    
-    # --- VISUALIZATION ---
-    "ggplot2", "scales",
-    
-    # --- GGIR + ACTIVITY ---
-    "GGIR", "ActCR", "actilifecounts",
-    
-    # --- REPORTING ---
-    "officer", "flextable", "doconv",
-    
-    # --- FILE I/O ---
-    "readxl", "writexl",
-    
-    # --- CONFIG / SYSTEM ---
-    "yaml", "processx", "R6", "jsonlite", "httr", "curl", "digest",
-    
-    # --- GRAPHICS ENGINE (CRITICAL FIX) ---
-    "ragg", "systemfonts", "textshaping",
-    
-    # --- DATE/TIME + HMS ---
-    "hms",
-    
-    # --- OPTIONAL BUT SAFE ---
-    "here"
-  )
+required_packages <- c(
+  # --- SHINY UI ---
+  "shiny", "bslib", "shinyWidgets", "shinyjs", "shinycssloaders", "shinyFiles",
   
+  # --- DATA / MANIPULATION ---
+  "tidyverse", "dplyr", "readr", "tibble", "stringr", "lubridate",
+  "janitor",
   
-  installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
-  missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+  # --- VISUALIZATION ---
+  "ggplot2", "scales",
   
-  installed <- installed.packages(lib.loc = local_lib)[, "Package"]
+  # --- GGIR + ACTIVITY ---
+  "GGIR", "ActCR", "actilifecounts",
   
-  if (!all(required_packages %in% installed)) {
-    stop("Missing required packages. Please reinstall environment.")
+  # --- REPORTING ---
+  "officer", "flextable", "doconv",
   
-  } else {
-    message(">>> All R dependencies are present.")
-  }
+  # --- FILE I/O ---
+  "readxl", "writexl",
   
+  # --- CONFIG / SYSTEM ---
+  "yaml", "processx", "R6", "jsonlite", "httr", "curl", "digest",
+  
+  # --- GRAPHICS ENGINE (CRITICAL FIX) ---
+  "ragg", "systemfonts", "textshaping",
+  
+  # --- DATE/TIME + HMS ---
+  "hms",
+  
+  # --- OPTIONAL BUT SAFE ---
+  "here"
+)
+
+
+installed_pkgs <- installed.packages(lib.loc=local_lib)[, "Package"]
+missing_pkgs <- required_packages[!(required_packages %in% installed_pkgs)]
+
+installed <- installed.packages(lib.loc = local_lib)[, "Package"]
+
+if (!all(required_packages %in% installed)) {
+  stop("Missing required packages. Please reinstall environment.")
+  
+} else {
+  message(">>> All R dependencies are present.")
+}
+
 
 library(GGIR)
 library(ActCR)
@@ -270,7 +270,7 @@ ui <- page_navbar(
       el.innerText = message.text + (message.cursor ? ' █' : ' _');
       
       // AUTO-SCROLL : On force le scroll vers le bas à chaque mise à jour
-      el.scrollTop = el.scrollHeight;
+      // el.scrollTop = el.scrollHeight;
     }
   });
 ")),
@@ -278,11 +278,11 @@ ui <- page_navbar(
     
     
     
-   # tags$script("
-  #    /* Auto-scroll de la console vers le bas */
-   #   setInterval(function() {
-  #      var el = document.getElementById('log_console');
-   #     if (el) { el.scrollTop = el.scrollHeight; }
+    # tags$script("
+    #    /* Auto-scroll de la console vers le bas */
+    #   setInterval(function() {
+    #      var el = document.getElementById('log_console');
+    #     if (el) { el.scrollTop = el.scrollHeight; }
     #  }, 1000);
     #")
   ),
@@ -302,7 +302,7 @@ ui <- page_navbar(
                 verbatimTextOutput("sys_status"),
                 layout_column_wrap(
                   width = 1/2,
-                  actionButton("btn_check_sys", "Check dependencies", class = "btn-secondary w-100"),
+                  actionButton("btn_check_sys", "Check dependencies", class = "btn-primary w-100"),
                   # This button will be highlighted if installation is needed
                   uiOutput("install_button_ui") 
                 )
@@ -319,22 +319,28 @@ ui <- page_navbar(
                 width = 1/3,
                 div(
                   tags$label("1. Raw .bin Files"),
-                  shinyDirButton("dir_bin", "Browse...", "Select Folder containing .bin files"),
+                  #shinyDirButton("dir_bin", "Browse...", "Select Folder containing .bin files"),
+                  shinyDirButton(
+                    "dir_bin",
+                    "Browse...",
+                    "Select Folder containing .bin files",
+                    class = "btn-primary"
+                  ),
                   verbatimTextOutput("path_bin", placeholder = TRUE)
                 ),
                 div(
                   tags$label("2. Software Sleep Reports"),
-                  shinyDirButton("dir_sleep", "Browse...", "Select Sleep Reports folder"),
+                  shinyDirButton("dir_sleep", "Browse...", "Select Sleep Reports folder", class = "btn-primary"),
                   verbatimTextOutput("path_sleep", placeholder = TRUE)
                 ),
                 div(
                   tags$label("3. Participant Info Folder"),
-                  shinyDirButton("dir_participants", "Browse...", "Select folder with EN/TA/HI CSVs"),
+                  shinyDirButton("dir_participants", "Browse...", "Select folder with EN/TA/HI CSVs", class = "btn-primary"),
                   verbatimTextOutput("path_participants", placeholder = TRUE)
                 )
               ),
               hr(),
-              actionButton("btn_save_config", "Save All Configurations", class = "btn-success w-100")
+              actionButton("btn_save_config", "Save All Configurations", class = "btn-primary w-100")
             )
   ),
   
@@ -358,7 +364,7 @@ ui <- page_navbar(
               ),
               
               actionButton("run_full_pipeline", "START ANALYSIS", 
-                           class = "btn-success btn-lg", icon = icon("play")),
+                           class = "btn-primary btn-lg", icon = icon("play")),
               
               card(
                 card_header(
@@ -429,7 +435,7 @@ server <- function(input, output, session) {
     q("no") # Ferme proprement R
   })
   
-
+  
   
   # --- 1. DIRECTORY SELECTION LOGIC ---
   # Get available drives (C:, D:, etc. on Windows / Volumes on Mac)
@@ -576,7 +582,7 @@ server <- function(input, output, session) {
                    class = "btn-danger w-100", icon = icon("download"))
     } else {
       actionButton("btn_install_py", "Reinstall / Repair Python", 
-                   class = "btn-outline-secondary w-100")
+                   class = "btn-outline-primary w-100")
     }
   })
   
@@ -611,7 +617,7 @@ server <- function(input, output, session) {
     ))
   })
   
-
+  
   
   # Clear console logic
   observeEvent(input$clear_logs, {
@@ -679,14 +685,12 @@ server <- function(input, output, session) {
       
       con <- file(log_file, open = "wt")
       
-      #sink(con, type = "message")
-      #sink(con, type = "output")
+      sink(con, type = "message")
+      sink(con, type = "output")
       
       log_msg <- function(msg) {
-        cat(msg, "\n")
+        cat(msg, "\n", file = con, append = TRUE)  # écrit dans fichier
         flush(con)
-        # FORCE SHINY À METTRE À JOUR L'INTERFACE
-        Sys.sleep(0.1) 
       }
       
       
@@ -911,8 +915,11 @@ server <- function(input, output, session) {
         
       }, finally = {
         
-        if (isOpen(con)) close(con)
+        # 🔥 fermer correctement les sinks
+        try(sink(NULL, type = "message"), silent = TRUE)
+        try(sink(NULL, type = "output"), silent = TRUE)
         
+        if (isOpen(con)) close(con)
       })
       
       setProgress(1)
@@ -922,8 +929,8 @@ server <- function(input, output, session) {
     
     showNotification("✅ Pipeline Finished", type = "message")
   })
-    
-   
+  
+  
   
   # --- 7. REPORT GENERATION ---
   
