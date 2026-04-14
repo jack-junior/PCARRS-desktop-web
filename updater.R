@@ -43,7 +43,7 @@ check_and_update <- function(update_roots = FALSE, update_code = TRUE, shiny_pro
   
   # --- PARTIE B : Fichiers Racines (Seulement si update_roots est TRUE) ---
   if (update_roots) {
-    root_files <- c("app.R", "config.yml") # Liste des fichiers racine à surveiller
+    root_files <- c("app.R") # Liste des fichiers racine à surveiller
     for (f in root_files) {
       url_file <- sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, f)
       res_file <- GET(url_file)

@@ -2,9 +2,11 @@
 # GGIR Pipeline 
 # ==============================================================================
 
+suppressPackageStartupMessages({
 library(GGIR)
 library(yaml)
 library(tidyverse)
+ })
 
 # 1. LOAD CONFIGURATION
 if (!file.exists("config.yml")) {

@@ -1,21 +1,63 @@
-#!/usr/bin/env Rscript
-
-library(tidyverse)
-library(janitor)
-library(yaml)
-
+# #!/usr/bin/env Rscript
+# 
+suppressPackageStartupMessages({
+   library(tidyverse)
+   library(janitor)
+   library(yaml)
+ })
+ 
 # =============================
-# USER SETTINGS (Updated for Config)
-# =============================
-
-# Load config to get dynamic paths
-cfg <- yaml::read_yaml("config.yml")
-
-# Root folder containing one subfolder per participant (e.g. 111111_311025)
-stepcount_root_dir <- cfg$paths$summaries
-
+ # USER SETTINGS (Updated for Config)
+ # =============================
+ 
+ # Load config to get dynamic paths
+ config_path <- "config.yml"
+ 
+ if (!file.exists(config_path)) {
+   # Si on ne le trouve pas, on tente de remonter d'un cran (au cas où le script tourne DEPUIS le dossier code/)
+   config_path <- "../config.yml"
+ }
+ 
+ if (!file.exists(config_path)) {
+   stop("FATAL: config.yml not found. Current directory: ", getwd())
+ }
+ 
+ cfg <- yaml::read_yaml(config_path)
+ # Root folder containing one subfolder per participant (e.g. 111111_311025)
+ stepcount_root_dir <- cfg$paths$summaries
 # Output file for the combined master dataset
 output_file <- file.path(cfg$paths$summaries, "step_metrics.csv")
+
+
+
+# # Utilisation de suppressPackageStartupMessages pour nettoyer le log
+# suppressPackageStartupMessages({
+#   library(tidyverse)
+#   library(janitor)
+#   library(yaml)
+# })
+# 
+# # --- TEST DE SURVIE IMMÉDIAT ---
+# cat("\n[CHECK 1] Libraries loaded successfully\n")
+# cat("[CHECK 2] Working Directory:", getwd(), "\n")
+# 
+# # --- CHARGEMENT SÉCURISÉ DU YAML ---
+# config_path <- "config.yml"
+# if (!file.exists(config_path)) {
+#   config_path <- "../config.yml"
+# }
+# 
+# if (!file.exists(config_path)) {
+#   cat("[ERROR] config.yml non trouvé !\n")
+#   quit(status = 1)
+# }
+# 
+# cfg <- yaml::read_yaml(config_path)
+# cat("[CHECK 3] YAML loaded. Summary path:", cfg$paths$summaries, "\n")
+# 
+# stepcount_root_dir <- cfg$paths$summaries
+# output_file <- file.path(cfg$paths$summaries, "step_metrics.csv")
+
 
 # =============================
 # FUNCTION TO PROCESS ONE PARTICIPANT FOLDER
@@ -160,6 +202,11 @@ participant_dirs <- list.dirs(stepcount_root_dir, full.names = TRUE, recursive =
 participant_dirs <- participant_dirs[!basename(participant_dirs) %in% c("R_libs", "python_env", "images")]
 
 # Process each participant folder and row-bind results
+if (length(participant_dirs) == 0) {
+  message("⚠️ No participant directories found in: ", stepcount_root_dir)
+  quit(status = 0) # On sort proprement sans erreur pour ne pas bloquer le pipeline
+}
+
 all_daily <- purrr::map_dfr(participant_dirs, process_one_stepcount_dir)
 
 if (nrow(all_daily) > 0) {

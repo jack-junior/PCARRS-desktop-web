@@ -1,5 +1,23 @@
 # --- launch.R ---
 
+# --- 1. ISOLATION TOTALE (Anti-OneDrive / Anti-System) ---
+# On redéfinit le HOME de R sur le dossier du projet
+Sys.setenv(HOME = getwd())
+Sys.setenv(R_USER = getwd())
+
+# On force un dossier temporaire local pour éviter d'écrire dans AppData
+if(!dir.exists("temp")) dir.create("temp", showWarnings = FALSE)
+Sys.setenv(TMPDIR = file.path(getwd(), "temp"))
+Sys.setenv(TMP = file.path(getwd(), "temp"))
+Sys.setenv(TEMP = file.path(getwd(), "temp"))
+
+# --- 2. GESTION DES CHEMINS ---
+project_path <- getwd()
+local_lib    <- file.path(project_path, "resources", "R_libs")
+.libPaths(c(normalizePath(local_lib), .libPaths()))
+
+message(">>> R_USER redirected to: ", Sys.getenv("R_USER"))
+
 # A. DEFINE ABSOLUTE PATHS
 initial_options <- commandArgs(trailingOnly = FALSE)
 file_arg <- "--file="
@@ -22,20 +40,19 @@ if (!dir.exists(local_lib)) {
 # C. FORCE R TO USE LOCAL LIBRARIES
 Sys.setenv(R_LIBS_USER = local_lib)
 .libPaths(c(local_lib, .libPaths()))
+print("=== LIB PATHS ===")
+print(.libPaths())
 
 # D. LOAD CORE DEPENDENCIES
 suppressPackageStartupMessages({
   tryCatch({
-    library(digest, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)
-    library(httr, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)
-    library(shiny, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)
+    library(digest, quietly = TRUE, warn.conflicts = FALSE)
+    library(httr, quietly = TRUE, warn.conflicts = FALSE)
+    library(shiny, quietly = TRUE, warn.conflicts = FALSE)
+    library(later, quietly = TRUE, warn.conflicts = FALSE)
     
-    if (!require(later, lib.loc = local_lib, quietly = TRUE, warn.conflicts = FALSE)) {
-      install.packages("later", lib = local_lib, repos = "https://cloud.r-project.org")
-      library(later, lib.loc = local_lib, quietly = TRUE)
-    }
   }, error = function(e) {
-    # On ne montre l'erreur que si c'est vraiment critique
+    message(">>> Package loading issue: ", e$message)
   })
 })
 

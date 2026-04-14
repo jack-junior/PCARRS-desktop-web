@@ -2,14 +2,34 @@
 # Script to extract GGIR activity metrics from GGIR output (DYNAMIC VERSION)
 ################################################################################
 
-library(tidyverse)
-library(haven)
-library(yaml)
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(yaml)
+  library(haven) 
+})
+
+
+if (!exists("log_msg")) {
+  log_msg <- function(msg) { cat(paste0(Sys.time(), " - ", msg, "\n")) }
+}
 
 # =============================
 # 1. LOAD CONFIGURATION
 # =============================
-cfg <- yaml::read_yaml("config.yml")
+# Load config to get dynamic paths
+config_path <- "config.yml"
+
+if (!file.exists(config_path)) {
+  # Si on ne le trouve pas, on tente de remonter d'un cran (au cas où le script tourne DEPUIS le dossier code/)
+  config_path <- "../config.yml"
+}
+
+if (!file.exists(config_path)) {
+  stop("FATAL: config.yml not found. Current directory: ", getwd())
+}
+cfg <- yaml::read_yaml(config_path)
 
 get_daily_activity = function(GGIR_output = cfg$paths$ggir_output){
   

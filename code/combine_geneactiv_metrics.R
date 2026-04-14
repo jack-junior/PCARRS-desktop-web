@@ -62,13 +62,22 @@ activity <- read_csv(activity_file, show_col_types = FALSE) %>%
   mutate(calendar_date = as.Date(calendar_date)) %>%
   arrange(subject, calendar_date)
 
+# sleep <- read_csv(software_sleep_file, show_col_types = FALSE) %>%
+#   clean_names() %>%
+#   mutate(
+#     across(
+#       c(starts_with("software_sleep_day"),
+#         software_average_sleep_duration_hhmm),
+#       ~ substr(as.character(.),1,5)
+#     )
+#   )
+
 sleep <- read_csv(software_sleep_file, show_col_types = FALSE) %>%
   clean_names() %>%
   mutate(
     across(
-      c(starts_with("software_sleep_day"),
-        software_average_sleep_duration_hhmm),
-      ~ substr(as.character(.),1,5)
+      any_of(c(starts_with("software_sleep_day"), "software_average_sleep_duration_hhmm")),
+      ~ if_else(is.na(.), NA_character_, substr(as.character(.), 1, 5))
     )
   )
 
