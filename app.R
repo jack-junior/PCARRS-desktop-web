@@ -453,7 +453,7 @@ server <- function(input, output, session) {
     stopApp()
     # q("no") est commenté ici pour tes tests, 
     # réactive-le uniquement quand tout fonctionne parfaitement.
-    # q("no") 
+     q("no") 
   })
     
     # --- 1. UNIVERSAL LOGGING ENGINE ---
