@@ -737,7 +737,7 @@ server <- function(input, output, session) {
           
           finish_pipeline()
         }, error = function(e) {
-          log_msg(paste("❌ Error Step 5:", e$message))
+          #log_msg(paste("❌ Error Step 5:", e$message))
           # Si l'erreur est "non-function", c'est souvent un problème de parenthèse
           # ou de package mal chargé dans un des sous-scripts.
           prog$close()
