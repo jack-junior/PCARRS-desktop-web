@@ -411,9 +411,12 @@ ui <- page_navbar(
                   width = 1/2,
                   card(
                     card_header("1. Select Participants"),
-                    # Ajout d'un texte dynamique pour montrer quel batch est ciblé
-                    uiOutput("report_batch_display"), 
-                    p("Only participants with completed analysis (Step 5) for this batch are listed."),
+                    pickerInput("report_batch_selection", "Select Batch to Report:", 
+                                choices = NULL, # Sera rempli par le serveur
+                                options = list(`live-search` = TRUE)),
+                    
+                    hr(),
+                    p("Only participants with completed analysis (Step 1 - 5) for this batch are listed."),
                     pickerInput("report_selected_ids", "Available for Reporting:", choices = NULL, multiple = TRUE,
                                 options = list(`actions-box` = TRUE, `live-search` = TRUE, `none-selected-text` = "Select a batch first...")),
                     actionButton("refresh_report_list", "Refresh List", icon = icon("sync"), class = "btn-outline-secondary btn-sm")
@@ -969,20 +972,21 @@ server <- function(input, output, session) {
   
   # --- 6. REPORT GENERATION ---
   
-  # 1. Affichage du batch actif dans l'UI
-  output$report_batch_display <- renderUI({
-    b <- if (exists("batch_name") && batch_name != "") batch_name else "None selected"
-    helpText(paste("Current Batch:", b))
+  # A. Mettre à jour la liste des batchs disponibles au démarrage et au clic sur refresh
+  observe({
+    # On liste les sous-dossiers du répertoire 'summaries'
+    if (dir.exists("summaries")) {
+      available_batches <- list.dirs("summaries", full.names = FALSE, recursive = FALSE)
+      updatePickerInput(session, "report_batch_selection", choices = available_batches)
+    }
   })
   
-  # 2. Fonction get_ready_ids MISE À JOUR pour cibler le dossier du batch
-  get_ready_ids <- function() {
-    # Vérifier si batch_name existe et n'est pas vide
-    b_name <- if (exists("batch_name")) batch_name else ""
-    if (b_name == "") return(character(0))
+  # B. Fonction get_ready_ids MODIFIÉE pour prendre un batch en argument
+  get_ready_ids <- function(target_batch) {
+    if (is.null(target_batch) || target_batch == "") return(character(0))
     
-    # Chemin vers le fichier combiné spécifique au batch
-    file <- file.path("summaries", b_name, "geneactiv_combined_metrics.csv")
+    # Chemin vers le fichier combiné spécifique au batch choisi dans l'input
+    file <- file.path("summaries", target_batch, "geneactiv_combined_metrics.csv")
     
     if (!file.exists(file)) return(character(0))
     
@@ -992,38 +996,41 @@ server <- function(input, output, session) {
     
     if (is.null(df) || !"subject" %in% names(df)) return(character(0))
     
-    # Filtrer les valides (plus robuste)
+    # Filtrage des valides
     valid_col <- if("valid_7days_activity" %in% names(df)) "valid_7days_activity" else "valid_7days_overall"
     
     valid_flag <- df[[valid_col]]
     if (is.character(valid_flag)) {
       valid_mask <- tolower(valid_flag) == "true"
     } else {
-      valid_mask <- valid_flag == 1 | valid_flag == TRUE
+      valid_mask <- (valid_flag == 1 | valid_flag == TRUE)
     }
     
     ids <- sort(unique(as.character(df$subject[valid_mask])))
     return(ids[!is.na(ids) & ids != ""])
   }
   
-  # 3. Rafraîchissement automatique quand le batch change
-  observe({
-    # On rend cette fonction dépendante de l'input du batch (ou du nom du batch)
-    # pour qu'elle se déclenche dès que l'utilisateur sélectionne un batch
-    ids <- get_ready_ids()
-    shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
-  })
+  # C. Rafraîchissement AUTOMATIQUE des participants quand le batch sélectionné change
+  observeEvent(input$report_batch_selection, {
+    req(input$report_batch_selection)
+    ids <- get_ready_ids(input$report_batch_selection)
+    updatePickerInput(session, "report_selected_ids", choices = ids)
+  }, ignoreInit = FALSE)
   
-  # 4. Rafraîchissement manuel
+  # D. Rafraîchissement MANUEL (Bouton Refresh)
   observeEvent(input$refresh_report_list, {
-    ids <- get_ready_ids()
-    shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
-    
-    if(length(ids) > 0) {
-      showNotification(paste(length(ids), "participants ready for reports."), type = "message")
-    } else {
-      showNotification("No ready participants found for this batch.", type = "warning")
+    # 1. Update batch list
+    if (dir.exists("summaries")) {
+      available_batches <- list.dirs("summaries", full.names = FALSE, recursive = FALSE)
+      updatePickerInput(session, "report_batch_selection", choices = available_batches, 
+                        selected = input$report_batch_selection)
     }
+    
+    # 2. Update participants
+    ids <- get_ready_ids(input$report_batch_selection)
+    updatePickerInput(session, "report_selected_ids", choices = ids)
+    
+    showNotification("Lists refreshed.", type = "message")
   })
   
   # --- Helper pour logger dans la console de rapport ---
@@ -1044,6 +1051,7 @@ server <- function(input, output, session) {
   
   # --- 6. REPORT GENERATION AMÉLIORÉE ---
   observeEvent(input$gen_report_multi, {
+    batch_name <<- input$report_batch_selection
     req(input$report_selected_ids, input$report_languages)
     
     selected_ids <- input$report_selected_ids
@@ -1094,6 +1102,7 @@ server <- function(input, output, session) {
   
   # Logique pour fusionner les rapports
   observeEvent(input$merge_selected_reports, {
+    batch_name <<- input$report_batch_selection
     req(input$report_languages)
     
     selected_langs <- input$report_languages
