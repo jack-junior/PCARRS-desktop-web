@@ -9,12 +9,28 @@ library(lubridate)
 # --- LOAD CONFIG ---
 cfg <- yaml::read_yaml("config.yml")
 
+safe_log <- function(msg, type = "info") {
+  prefix <- switch(type, "error" = "❌ ", "warning" = "⚠️ ", "info" = "🔹 ", "")
+  full_msg <- paste0(prefix, msg)
+  
+  if (exists("log_msg") && is.function(log_msg)) {
+    log_msg(full_msg)
+  } else {
+    cat(full_msg, "\n")
+  }
+}
+
+# Access batch_name from the global environment (defined in Shiny)
+b_name <- if (exists("batch_name")) batch_name else ""
+
 sleep_reports_dir <- cfg$paths$sleep_data
 
-output_file <- file.path(
-  cfg$paths$summaries,
-  "software_sleep_metrics.csv"
-)
+# Update output_file to save inside the batch subfolder
+if (b_name != "") {
+  output_file <- file.path(cfg$paths$summaries, b_name, "software_sleep_metrics.csv")
+} else {
+  output_file <- file.path(cfg$paths$summaries, "software_sleep_metrics.csv")
+}
 
 dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
 
@@ -84,7 +100,8 @@ extract_sleep_metrics <- function(file){
   }
   
   pid_full <- get_val(pid_line)
-  subject  <- substr(pid_full,1,6)
+  # Update subject ID to 7 characters
+  subject  <- substr(pid_full, 1, 7)
   
   age <- suppressWarnings(as.numeric(get_val(age_line)))
   sex <- get_val(sex_line)
@@ -135,15 +152,26 @@ extract_sleep_metrics <- function(file){
     # SORT BY DATE (CRITICAL)
     # ========================================================
     
-    library(lubridate)
+     library(lubridate)
+    # 
+    # temp_df <- temp_df %>%
+    #   mutate(
+    #     date = parse_date_time(
+    #       date,
+    #       orders = c("d-b-Y","d/m/Y","Y-m-d","d-b-y")
+    #     )
+    #   ) %>%
+    #   mutate(date = as.Date(date))
     
     temp_df <- temp_df %>%
       mutate(
-        date = parse_date_time(
+        date = suppressWarnings(parse_date_time(
           date,
           orders = c("d-b-Y","d/m/Y","Y-m-d","d-b-y")
-        )
+        ))
       ) %>%
+      # IMPORTANT : On filtre APRÈS le suppressWarnings pour ne garder que les vraies dates
+      filter(!is.na(date)) %>% 
       mutate(date = as.Date(date))
     
     # ========================================================
@@ -245,5 +273,5 @@ write_csv(
   output_file
 )
 
-message("Sleep metrics successfully extracted (7-day aligned & corrected)")
-message("Saved to: ", output_file)
+safe_log("Sleep metrics successfully extracted (7-day aligned & corrected)")
+safe_log(paste0("Saved to: ", output_file))

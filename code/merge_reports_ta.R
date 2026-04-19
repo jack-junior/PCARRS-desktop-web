@@ -2,20 +2,36 @@ library(officer)
 library(yaml)
 library(tidyverse)
 
-# Chargement de la config pour trouver les dossiers
+# ============================================================
+# 1. BATCH CONFIGURATION
+# ============================================================
 cfg <- yaml::read_yaml("config.yml")
-report_dir <- file.path(cfg$paths$reports, "reports_Tamil")
 
-# 1. Lister tous les fichiers Word individuels
+# Retrieve the batch name from the global environment
+b_name <- if (exists("batch_name")) batch_name else ""
+
+if (b_name == "") {
+  stop("❌ ERROR: No batch_name defined. The script cannot locate the Tamil reports.")
+}
+
+# Aligned path: reports -> batch_name -> reports_Tamil
+report_dir <- file.path(cfg$paths$reports, b_name, "reports_Tamil")
+
+# ============================================================
+# 2. FILE DETECTION
+# ============================================================
+# List all individual Tamil Word reports
 report_files <- list.files(report_dir, pattern = "Report_Tamil_.*\\.docx", full.names = TRUE)
 
 if(length(report_files) == 0) {
-  stop("Aucun rapport individuel trouvé pour la fusion.")
+  stop(paste("❌ ERROR: No individual Tamil reports found in:", report_dir))
 }
 
-cat("--- Fusion de", length(report_files), "rapports en cours ---\n")
+cat("--- Merging", length(report_files), "Tamil reports for Batch:", b_name, "---\n")
 
-# 2. Créer le document maître
+# ============================================================
+# 3. CREATE MASTER DOCUMENT
+# ============================================================
 combined_doc <- read_docx() %>%
   body_set_default_section(
     value = prop_section(
@@ -23,23 +39,36 @@ combined_doc <- read_docx() %>%
     )
   )
 
-# 3. Boucler pour ajouter chaque rapport avec un saut de page
+# Loop to append each report with a page break
 for(i in seq_along(report_files)) {
   combined_doc <- body_add_docx(combined_doc, src = report_files[i])
+  
+  # Add a page break only between documents
   if(i < length(report_files)) {
     combined_doc <- body_add_break(combined_doc)
   }
 }
 
-# 4. Sauvegarde finale
-final_docx <- file.path(report_dir, "Full_Study_Combined_Report_Tamil.docx")
-final_pdf  <- file.path(report_dir, "Full_Study_Combined_Report_Tamil.pdf")
+# ============================================================
+# 4. SAVE OUTPUTS IN BATCH FOLDER
+# ============================================================
+final_filename <- paste0("Full_Combined_Report_Tamil_", b_name)
+final_docx <- file.path(report_dir, paste0(final_filename, ".docx"))
+final_pdf  <- file.path(report_dir, paste0(final_filename, ".pdf"))
 
+# Write the Word file
 print(combined_doc, target = final_docx)
 
-# 5. Conversion en PDF
+# ============================================================
+# 5. PDF CONVERSION
+# ============================================================
 if(require(doconv)) {
-  to_pdf(final_docx, output = final_pdf)
+  tryCatch({
+    to_pdf(final_docx, output = final_pdf)
+    cat("✅ Merge complete! Tamil PDF available at:", final_pdf, "\n")
+  }, error = function(e) {
+    cat("⚠️ PDF conversion failed for Tamil report, but Word file was saved.\n")
+  })
+} else {
+  cat("✅ Merge complete! (Word only, 'doconv' package not found)\n")
 }
-
-cat("--- Fusion terminée ! Fichier disponible dans :", final_pdf, "---\n")

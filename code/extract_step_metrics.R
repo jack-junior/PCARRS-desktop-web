@@ -1,63 +1,62 @@
-# #!/usr/bin/env Rscript
-# 
+#!/usr/bin/env Rscript
+
 suppressPackageStartupMessages({
-   library(tidyverse)
-   library(janitor)
-   library(yaml)
- })
- 
-# =============================
- # USER SETTINGS (Updated for Config)
- # =============================
- 
- # Load config to get dynamic paths
- config_path <- "config.yml"
- 
- if (!file.exists(config_path)) {
-   # Si on ne le trouve pas, on tente de remonter d'un cran (au cas où le script tourne DEPUIS le dossier code/)
-   config_path <- "../config.yml"
- }
- 
- if (!file.exists(config_path)) {
-   stop("FATAL: config.yml not found. Current directory: ", getwd())
- }
- 
- cfg <- yaml::read_yaml(config_path)
- # Root folder containing one subfolder per participant (e.g. 111111_311025)
- stepcount_root_dir <- cfg$paths$summaries
-# Output file for the combined master dataset
-output_file <- file.path(cfg$paths$summaries, "step_metrics.csv")
+  library(tidyverse)
+  library(janitor)
+  library(yaml)
+})
 
+# --- DYNAMIC PROJECT ROOT DETECTION ---
+config_path <- "config.yml"
+if (!file.exists(config_path)) config_path <- "../config.yml"
 
+if (!file.exists(config_path)) {
+  stop("FATAL: config.yml not found. Check project structure.")
+}
 
-# # Utilisation de suppressPackageStartupMessages pour nettoyer le log
-# suppressPackageStartupMessages({
-#   library(tidyverse)
-#   library(janitor)
-#   library(yaml)
-# })
-# 
-# # --- TEST DE SURVIE IMMÉDIAT ---
-# cat("\n[CHECK 1] Libraries loaded successfully\n")
-# cat("[CHECK 2] Working Directory:", getwd(), "\n")
-# 
-# # --- CHARGEMENT SÉCURISÉ DU YAML ---
-# config_path <- "config.yml"
-# if (!file.exists(config_path)) {
-#   config_path <- "../config.yml"
-# }
-# 
-# if (!file.exists(config_path)) {
-#   cat("[ERROR] config.yml non trouvé !\n")
-#   quit(status = 1)
-# }
-# 
-# cfg <- yaml::read_yaml(config_path)
-# cat("[CHECK 3] YAML loaded. Summary path:", cfg$paths$summaries, "\n")
-# 
-# stepcount_root_dir <- cfg$paths$summaries
-# output_file <- file.path(cfg$paths$summaries, "step_metrics.csv")
+# Define project root based on config file location
+base_project <- dirname(normalizePath(config_path, winslash = "/"))
 
+# --- DYNAMIC PYTHON LOCATION ---
+path_options <- c(
+  file.path(base_project, "resources/python_env/python.exe"),
+  file.path(base_project, "resources/python_env/Scripts/python.exe"),
+  file.path(base_project, "resources/python_env/bin/python.exe")
+)
+
+python_path <- NULL
+for (opt in path_options) {
+  if (file.exists(opt)) {
+    python_path <- normalizePath(opt, winslash = "/", mustWork = FALSE)
+    break
+  }
+}
+
+if (is.null(python_path)) {
+  stop("FATAL: python.exe not found in resources/python_env/")
+}
+
+# Set environment
+Sys.setenv(PYTHON = python_path)
+options(python_cmd = python_path)
+message("--- SUCCESS: Portable Mode Active. Using: ", python_path)
+
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+
+parser <- ArgumentParser()
+parser$add_argument("--batch", type="character", help="Batch name")
+args <- parser$parse_args()
+
+cfg <- yaml::read_yaml(config_path)
+
+# On utilise base_project pour construire les chemins de données
+if (!is.null(args$batch) && args$batch != "") {
+  stepcount_root_dir <- file.path(base_project, cfg$paths$summaries, args$batch)
+} else {
+  stepcount_root_dir <- file.path(base_project, cfg$paths$summaries)
+}
+
+output_file <- file.path(stepcount_root_dir, "step_metrics.csv")
 
 # =============================
 # FUNCTION TO PROCESS ONE PARTICIPANT FOLDER
@@ -107,7 +106,8 @@ process_one_stepcount_dir <- function(stepcount_dir) {
   }
   
   # ---- read Daily ----
-  daily <- readr::read_csv(daily_file, show_col_types = FALSE) %>%
+  daily <- suppressWarnings( 
+    readr::read_csv(daily_file, show_col_types = FALSE) %>%
     clean_names() %>%
     # keep core fields; adjust names if needed
     select(
@@ -115,11 +115,24 @@ process_one_stepcount_dir <- function(stepcount_dir) {
       date,
       total_steps = steps,
       cadence95 = cadence95th_steps_min
-    )
+    ) 
+  )
+  
+  # daily <- suppressWarnings(
+  #   readr::read_csv(daily_file, show_col_types = FALSE, progress = FALSE)
+  # )
   
   # ---- read Bouts ----
-  bouts <- readr::read_csv(bouts_file, show_col_types = FALSE) %>%
-    clean_names()
+  bouts <- suppressWarnings(
+    readr::read_csv(bouts_file, show_col_types = FALSE, progress = FALSE) %>%
+      clean_names()
+  )
+  
+  # Safety check: if Bouts is empty, return a tibble with NA metrics to avoid errors
+  if (nrow(bouts) == 0) {
+    message("No bouts found for: ", participant_id)
+    return(daily %>% mutate(participant = participant_id, .before = 1))
+  }
   
   # ---- derive daily bout metrics ----
   bouts_daily <- bouts %>%
@@ -195,23 +208,26 @@ process_one_stepcount_dir <- function(stepcount_dir) {
 # MAIN: LOOP OVER ALL PARTICIPANT FOLDERS
 # =============================
 
-# immediate subdirectories of the root, each assumed to be a participant folder
+# List subdirectories INSIDE the batch folder (recursive = FALSE)
+# This finds: summaries/250126/2900764_250125, etc.
 participant_dirs <- list.dirs(stepcount_root_dir, full.names = TRUE, recursive = FALSE)
 
-# Filter out non-participant directories
+# Safety: Filter out resource folders
 participant_dirs <- participant_dirs[!basename(participant_dirs) %in% c("R_libs", "python_env", "images")]
 
-# Process each participant folder and row-bind results
+# Handle case where files might be directly in the batch (no subfolders)
 if (length(participant_dirs) == 0) {
-  message("⚠️ No participant directories found in: ", stepcount_root_dir)
-  quit(status = 0) # On sort proprement sans erreur pour ne pas bloquer le pipeline
+  message("No subdirectories found. Treating current directory as participant folder.")
+  participant_dirs <- stepcount_root_dir
 }
 
+# Run the processing for each participant folder found
 all_daily <- purrr::map_dfr(participant_dirs, process_one_stepcount_dir)
 
 if (nrow(all_daily) > 0) {
   all_daily <- all_daily %>%
-    mutate(subject = str_sub(participant, 1, 6)) %>%
+    # Updated to 7 characters for subject ID consistency
+    mutate(subject = str_sub(participant, 1, 7)) %>% 
     select(-participant, -filename) %>%
     rename(calendar_date = date)
   

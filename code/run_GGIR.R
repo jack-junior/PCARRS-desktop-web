@@ -8,6 +8,7 @@ library(yaml)
 library(tidyverse)
  })
 
+
 # 1. LOAD CONFIGURATION
 if (!file.exists("config.yml")) {
   stop("Configuration file (config.yml) not found. Please save settings in the App first.")
@@ -15,6 +16,13 @@ if (!file.exists("config.yml")) {
 cfg <- yaml::read_yaml("config.yml")
 
 # 2. DEFINE DYNAMIC PATHS
+# if (exists("batch_ggir_out")) {
+#   output_dir <- batch_ggir_out
+#   message(paste("--- Batch Mode: Output set to", output_dir, "---"))
+# } else {
+#   output_dir <- cfg$paths$ggir_output
+# }
+
 data_dir   <- cfg$paths$raw_bin
 output_dir <- cfg$paths$ggir_output
 
@@ -26,6 +34,18 @@ if(!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
+# --- AJOUT : Nettoyage des milestones pour forcer la détection des nouveaux fichiers ---
+study_name <- "CARRS Brain"
+# Chemin vers les fichiers de contrôle
+path_to_ms <- file.path(output_dir, paste0("output_", study_name), "meta", "basic")
+
+if (dir.exists(path_to_ms)) {
+  message("--- Checking for new files in directory ---")
+  # On ne supprime que le fichier qui dit "tout le dossier est scanné"
+  # Cela force GGIR à revérifier le contenu du dossier sans effacer les calculs déjà faits.
+  file_check <- file.path(output_dir, paste0("output_", study_name), "meta", "ms1.bin")
+  if (file.exists(file_check)) unlink(file_check)
+}
 
 # 3. SELECTIVE PROCESSING LOGIC (Unified)
 final_data_dir <- data_dir
@@ -60,11 +80,12 @@ GGIR(
   mode = c(1, 2, 3, 4, 5),
   datadir = final_data_dir, 
   outputdir = output_dir,
-  overwrite = FALSE,           # CORRIGÉ : Aligné sur l'originel (évite les calculs redondants)
-  studyname = "CARRS Brain",   # CORRIGÉ : Nom exact du projet originel
-  idloc = 6,
+  chunksize = 0.5,
+  overwrite = FALSE,           
+  studyname = "CARRS Brain",   
+  idloc = 7,
   printsummary = TRUE, 
-  do.imp = FALSE,              # Confirmé : pas d'imputation
+  do.imp = FALSE,              
   epochvalues2csv = TRUE, 
   timewindow = c("WW"), 
   

@@ -4,7 +4,6 @@ from pathlib import Path
 import sys
 import argparse # To handle IDs passed from R
 import ssl
-
 import os
 
 # --- FIX POUR L'ERREUR SSL ---
@@ -28,24 +27,30 @@ with open(config_path, "r", encoding="utf-8") as f:
     cfg = yaml.safe_load(f)
 
 # ------------------------------------
-# 2. SETTINGS
+# 2. SETTINGS & ARGUMENTS
 # ------------------------------------
-BIN_ROOT = Path(cfg['paths']['raw_bin'])
-OUTPUT_ROOT = project_root / cfg['paths']['summaries']
-OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-STEPCOUNT_EXE = f'"{sys.executable}" -m stepcount.stepcount'
-
-# ------------------------------------
-# 3. SELECTIVE LOGIC (New)
-# ------------------------------------
-# Check if R passed specific IDs as arguments
+# Check if R passed specific IDs or a Batch Name as arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--ids', type=str, help='Comma separated list of IDs')
+parser.add_argument('--batch', type=str, help='Batch name for folder organization') # Added Batch Arg
 args = parser.parse_args()
 
 target_ids = []
 if args.ids:
     target_ids = [i.strip() for i in args.ids.split(',') if i.strip()]
+
+BIN_ROOT = Path(cfg['paths']['raw_bin'])
+
+# Update OUTPUT_ROOT to include batch subfolder if provided
+if args.batch:
+    OUTPUT_ROOT = project_root / cfg['paths']['summaries'] / args.batch
+else:
+    OUTPUT_ROOT = project_root / cfg['paths']['summaries']
+    
+#OUTPUT_ROOT = project_root / "summaries"
+
+OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+STEPCOUNT_EXE = f'"{sys.executable}" -m stepcount.stepcount'
 
 # ------------------------------------
 # FUNCTIONS
@@ -57,8 +62,8 @@ def find_bin_files(root: Path, filter_ids=None):
     if not filter_ids:
         return all_files
     
-    # Only keep files where the filename stem matches one of the target_ids
-    return [f for f in all_files if any(id_match in f.stem for id_match in filter_ids)]
+    # Matches if any target_id (7 digits) is at the start of the filename
+    return [f for f in all_files if any(f.name.startswith(id_match) for id_match in filter_ids)]
 
 def has_already_been_processed(bin_file: Path, output_root: Path) -> bool:
     file_stem = bin_file.stem
@@ -98,8 +103,6 @@ def run_stepcount_on_file(bin_file: Path, output_root: Path):
     done_flag.write_text("completed")
     
     return True
-    
-    
 
 # ------------------------------------
 # MAIN
@@ -117,13 +120,12 @@ def main():
     failed_count = 0
     total_files = len(bin_files)
 
-    print(f"PYTHON START: Target files to check: {total_files}")
+    print(f"PYTHON START: Batch [{args.batch if args.batch else 'None'}]")
+    print(f"Target files to check: {total_files}")
     if target_ids:
         print(f"Filtering for IDs: {target_ids}")
 
     for bin_file in bin_files:
-        # If user selected specific IDs, we RE-PROCESS (overwrite) instead of skipping XX
-        #if not target_ids and has_already_been_processed(bin_file, OUTPUT_ROOT):
         print(f"Checking: {bin_file.name}", flush=True)
 
         if has_already_been_processed(bin_file, OUTPUT_ROOT):
@@ -139,6 +141,7 @@ def main():
 
     print("\n" + "="*30)
     print("STEPCOUNT EXECUTION SUMMARY", flush=True)
+    print(f"Batch:               {args.batch}")
     print(f"Total Files Handled: {total_files}")
     print(f"Successfully Done:   {processed_count}")
     print(f"Skipped (Existing):  {skipped_count}")

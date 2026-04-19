@@ -6,7 +6,7 @@
 #    - Software sleep metrics → FIRST 7 DAYS (recomputed averages)
 #
 # Output:
-# summaries/geneactiv_combined_metrics.csv
+# summaries/[batch_name]/geneactiv_combined_metrics.csv
 # ============================================================
 
 library(tidyverse)
@@ -14,15 +14,35 @@ library(yaml)
 library(janitor)
 
 # ============================================================
-# FILE PATHS (Updated for Config)
+# FILE PATHS (Updated for Config & Batch)
 # ============================================================
 
 cfg <- yaml::read_yaml("config.yml")
 
-activity_file       <- file.path(cfg$paths$summaries, "activity_metrics.csv")
-software_sleep_file <- file.path(cfg$paths$summaries, "software_sleep_metrics.csv")
+safe_log <- function(msg, type = "info") {
+  prefix <- switch(type, "error" = "❌ ", "warning" = "⚠️ ", "info" = "🔹 ", "")
+  full_msg <- paste0(prefix, msg)
+  
+  if (exists("log_msg") && is.function(log_msg)) {
+    log_msg(full_msg)
+  } else {
+    cat(full_msg, "\n")
+  }
+}
 
-output_file <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
+# Access batch_name from the global environment (defined in Shiny)
+b_name <- if (exists("batch_name")) batch_name else ""
+
+# Update paths to point to the batch-specific subfolder
+if (b_name != "") {
+  activity_file       <- file.path(cfg$paths$summaries, b_name, "activity_metrics.csv")
+  software_sleep_file <- file.path(cfg$paths$summaries, b_name, "software_sleep_metrics.csv")
+  output_file         <- file.path(cfg$paths$summaries, b_name, "geneactiv_combined_metrics.csv")
+} else {
+  activity_file       <- file.path(cfg$paths$summaries, "activity_metrics.csv")
+  software_sleep_file <- file.path(cfg$paths$summaries, "software_sleep_metrics.csv")
+  output_file         <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
+}
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -57,20 +77,13 @@ hhmm_to_minutes <- function(x){
 
 message("Loading datasets...")
 
+if (!file.exists(activity_file)) stop("Activity metrics file not found: ", activity_file)
+if (!file.exists(software_sleep_file)) stop("Software sleep metrics file not found: ", software_sleep_file)
+
 activity <- read_csv(activity_file, show_col_types = FALSE) %>%
   clean_names() %>%
   mutate(calendar_date = as.Date(calendar_date)) %>%
   arrange(subject, calendar_date)
-
-# sleep <- read_csv(software_sleep_file, show_col_types = FALSE) %>%
-#   clean_names() %>%
-#   mutate(
-#     across(
-#       c(starts_with("software_sleep_day"),
-#         software_average_sleep_duration_hhmm),
-#       ~ substr(as.character(.),1,5)
-#     )
-#   )
 
 sleep <- read_csv(software_sleep_file, show_col_types = FALSE) %>%
   clean_names() %>%
@@ -106,32 +119,18 @@ step_days <- activity_7 %>%
   )
 
 # ----------------------------
-# Activity summary (7 days)
+# Activity summary (7 days max)
 # ----------------------------
-
 activity_summary <- activity_7 %>%
   group_by(subject) %>%
   summarise(
-    
     n_days = n(),
     
-    avg_daily_steps_7days = ifelse(
-      n_days == 7,
-      round(mean(total_steps, na.rm = TRUE), 0),
-      NA_real_
-    ),
+    avg_daily_steps_7days = round(mean(total_steps, na.rm = TRUE), 0),
     
-    inactive_duration = ifelse(
-      n_days == 7,
-      round(mean(inactive_duration, na.rm = TRUE), 0),
-      NA_real_
-    ),
+    inactive_duration = round(mean(inactive_duration, na.rm = TRUE), 0),
     
-    active_duration = ifelse(
-      n_days == 7,
-      round(mean(active_duration, na.rm = TRUE), 0),
-      NA_real_
-    ),
+    active_duration = round(mean(active_duration, na.rm = TRUE), 0),
     
     step_start_date = min(calendar_date, na.rm = TRUE),
     step_end_date   = max(calendar_date, na.rm = TRUE),
@@ -139,18 +138,18 @@ activity_summary <- activity_7 %>%
     .groups = "drop"
   ) %>%
   mutate(
-    valid_7days_activity = n_days == 7,
+    valid_7days_activity = (n_days == 7), # Keeps the flag but doesn't block the data
     
     inactive_duration_hhmm = minutes_to_hhmm(inactive_duration),
     active_duration_hhmm   = minutes_to_hhmm(active_duration)
-  )%>%
-  select( -any_of("n_days"))
+  ) %>%
+  select(-any_of("n_days"))
 
 # ============================================================
 # SLEEP — FIRST 7 DAYS ONLY + RECOMPUTE AVERAGES
 # ============================================================
 
-message("Processing sleep (first 7 days)...")
+safe_log("Processing sleep (first 7 days)...")
 
 sleep_processed <- sleep %>%
   
@@ -165,27 +164,21 @@ sleep_processed <- sleep %>%
   
   rowwise() %>%
   mutate(
-    
     n_sleep_days = sum(!is.na(c(
-      software_sleep_day1_hhmm_min,
-      software_sleep_day2_hhmm_min,
-      software_sleep_day3_hhmm_min,
-      software_sleep_day4_hhmm_min,
-      software_sleep_day5_hhmm_min,
-      software_sleep_day6_hhmm_min,
+      software_sleep_day1_hhmm_min, software_sleep_day2_hhmm_min,
+      software_sleep_day3_hhmm_min, software_sleep_day4_hhmm_min,
+      software_sleep_day5_hhmm_min, software_sleep_day6_hhmm_min,
       software_sleep_day7_hhmm_min
     ))),
     
+    # Change: Check for >= 1 instead of == 7
     software_average_sleep_duration_7days_min =
       ifelse(
-        n_sleep_days == 7,
+        n_sleep_days >= 1,
         mean(c(
-          software_sleep_day1_hhmm_min,
-          software_sleep_day2_hhmm_min,
-          software_sleep_day3_hhmm_min,
-          software_sleep_day4_hhmm_min,
-          software_sleep_day5_hhmm_min,
-          software_sleep_day6_hhmm_min,
+          software_sleep_day1_hhmm_min, software_sleep_day2_hhmm_min,
+          software_sleep_day3_hhmm_min, software_sleep_day4_hhmm_min,
+          software_sleep_day5_hhmm_min, software_sleep_day6_hhmm_min,
           software_sleep_day7_hhmm_min
         ), na.rm = TRUE),
         NA_real_
@@ -193,23 +186,19 @@ sleep_processed <- sleep %>%
     
     software_average_sleep_efficiency_7days =
       ifelse(
-        n_sleep_days == 7,
+        n_sleep_days >= 1,
         round(mean(c(
-          software_efficiency_day1,
-          software_efficiency_day2,
-          software_efficiency_day3,
-          software_efficiency_day4,
-          software_efficiency_day5,
-          software_efficiency_day6,
+          software_efficiency_day1, software_efficiency_day2,
+          software_efficiency_day3, software_efficiency_day4,
+          software_efficiency_day5, software_efficiency_day6,
           software_efficiency_day7
         ), na.rm = TRUE), 1),
         NA_real_
       )
   ) %>%
   ungroup() %>%
-  
   mutate(
-    valid_7days_sleep = n_sleep_days == 7,
+    valid_7days_sleep = (n_sleep_days == 7), # Flag remains FALSE for 6 days
     
     software_average_sleep_duration_7days_hhmm =
       minutes_to_hhmm(software_average_sleep_duration_7days_min)
@@ -242,7 +231,7 @@ sleep_processed <- sleep %>%
     starts_with("software_efficiency_day7"),
     
     software_average_sleep_efficiency_7days
-  )%>%
+  ) %>%
   select(-ends_with("_min"), -any_of("n_days"))
 
 # ============================================================
@@ -274,11 +263,6 @@ combined <- combined %>%
       TRUE ~ "mismatch"
     ),
     
-    valid_date_alignment = date_alignment %in% c("perfect_match","near_match")
-  )
-
-combined <- combined %>%
-  mutate(
     valid_date_alignment = date_alignment %in% c("perfect_match","near_match")
   )
 
@@ -326,20 +310,30 @@ n_sleep_issue    <- sum(!combined$valid_7days_sleep, na.rm = TRUE)
 n_overall_issue  <- sum(!combined$valid_7days_overall, na.rm = TRUE)
 n_mismatch       <- sum(combined$date_alignment == "mismatch", na.rm = TRUE)
 
+# if(n_activity_issue > 0){
+#   warning(paste(n_activity_issue, "participants have incomplete activity data"))
+# }
+
 if(n_activity_issue > 0){
-  warning(paste(n_activity_issue, "participants have incomplete activity data"))
+  msg <- paste(n_activity_issue, "participants have incomplete activity data")
+  safe_log(msg)
 }
 
+
+
 if(n_sleep_issue > 0){
-  warning(paste(n_sleep_issue, "participants have incomplete sleep data"))
+  msg <- paste(n_sleep_issue, "participants have incomplete sleep data")
+  safe_log(msg)
 }
 
 if(n_overall_issue > 0){
-  warning(paste(n_overall_issue, "participants are not valid for analysis"))
+  msg <- paste(n_overall_issue, "participants are not valid for analysis")
+  safe_log(msg)
 }
 
 if(n_mismatch > 0){
-  warning(paste(n_mismatch, "participants have date mismatch between activity and sleep data"))
+  msg <- paste(n_mismatch, "participants have date mismatch between activity and sleep data")
+  safe_log(msg)
 }
 
 # ============================================================
@@ -350,5 +344,4 @@ dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
 
 write_csv(combined, output_file)
 
-message("Combined dataset saved to:")
-message(output_file)
+safe_log(paste("Combined dataset saved to:", output_file))

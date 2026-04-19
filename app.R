@@ -169,8 +169,9 @@ ui <- page_navbar(
     tags$style(HTML("
       /* 1. Global Structure */
       body {
-        height: 100vh !important;
-        overflow: hidden !important;
+       /* height: 100vh !important; */
+       /* overflow: hidden !important;*/
+        min-height: 100vh !important;
         display: flex;
         flex-direction: column;
       }
@@ -178,7 +179,7 @@ ui <- page_navbar(
       .tab-content {
         flex-grow: 1;
         overflow-y: auto !important;
-        height: calc(100vh - 70px);
+        height: calc(100vh - 120px);
         padding: 0px; /* Padding handled inside nav_panels */
         background-color: #f8f9fa;
       }
@@ -265,6 +266,11 @@ ui <- page_navbar(
       }
       #log_console_js {
         margin-top: 0 !important;
+      }
+      
+      #report_log_console {
+        background: #2c3e50 !important;
+        color: #ecf0f1 !important;
       }
     ")),
     
@@ -398,15 +404,18 @@ ui <- page_navbar(
   ),
   
   # --- TAB 4: REPORTS ---
+
   nav_panel("Reports",
             div(style = "padding: 20px;",
                 layout_column_wrap(
                   width = 1/2,
                   card(
                     card_header("1. Select Participants"),
-                    p("Only participants with completed analysis (Steps 1-5) are listed here."),
+                    # Ajout d'un texte dynamique pour montrer quel batch est ciblé
+                    uiOutput("report_batch_display"), 
+                    p("Only participants with completed analysis (Step 5) for this batch are listed."),
                     pickerInput("report_selected_ids", "Available for Reporting:", choices = NULL, multiple = TRUE,
-                                options = list(`actions-box` = TRUE, `live-search` = TRUE, `none-selected-text` = "Scan summaries first...")),
+                                options = list(`actions-box` = TRUE, `live-search` = TRUE, `none-selected-text` = "Select a batch first...")),
                     actionButton("refresh_report_list", "Refresh List", icon = icon("sync"), class = "btn-outline-secondary btn-sm")
                   ),
                   card(
@@ -420,21 +429,69 @@ ui <- page_navbar(
                     actionButton("merge_selected_reports", "MERGE SELECTED LANGUAGES", class = "btn-outline-success w-100", icon = icon("layer-group")),
                     span(textOutput("report_status_msg"), style = "margin-top:10px; display:block; color: #2c3e50; font-weight: bold;")
                   )
+                ), 
+                
+                br(),
+                
+                card(
+                  height = "300px", 
+                  full_screen = TRUE,
+                  card_header(
+                    div(class = "d-flex justify-content-between align-items-center",
+                        span(icon("terminal"), " Report Generation Log"),
+                        actionButton("clear_report_logs", "Clear", 
+                                     icon = icon("trash"), class = "btn-sm btn-outline-danger")
+                    )
+                  ),
+                  tags$div(id = "report_log_console", 
+                           style = "height: 100%; overflow-y: auto; background: #2c3e50; color: #ecf0f1; font-family: monospace; padding: 10px; font-size: 12px;")
                 )
             )
   ),
+  
   
   # --- NAVBAR LOGOS ---
   nav_spacer(),
   nav_item(tags$img(src = "logo1.png", class = "logo-right")),
   nav_item(tags$img(src = "logo2.png", class = "logo-right")),
-  nav_item(tags$img(src = "logo3.png", class = "logo-right"))
+  nav_item(tags$img(src = "logo3.png", class = "logo-right")),
+  
+  # --- FOOTER ---
+  footer = tags$footer(
+    style = "padding: 15px; border-top: 1px solid #dee2e6; background-color: #f8f9fa; width: 100%;",
+    div(class = "container-fluid",
+        div(class = "row align-items-center",
+            div(class = "col-md-6 text-start",
+                tags$span(style = "color: #2c3e50;",
+                          tags$b("© 2026 "),
+                          tags$a(href = "https://ccdcindia.org/", target = "_blank", 
+                                 "Centre for Chronic Disease Control", 
+                                 style = "text-decoration: none; color: #2c3e50;"),
+                          " | All rights reserved."
+                )
+            ),
+            div(class = "col-md-6 text-end",
+                tags$span(style = "color: #7f8c8d; font-size: 0.9em;",
+                          "Powered by ", 
+                          tags$b(style = "color: #2980b9;", "Gayasatori"), 
+                          " & ", 
+                          tags$b(style = "color: #2980b9;", "Sangenitorium")
+                )
+            )
+        )
+    )
+  )
+  
 )
+
+
+
   
 server <- function(input, output, session) {
     
   # --- 0. SESSION CLEANUP ---
   active_processes <- reactiveVal(list())
+  current_batch_name <- reactiveVal(NULL)
   
   session$onSessionEnded(function() {
     message("Closing session. Killing active background processes...")
@@ -453,7 +510,7 @@ server <- function(input, output, session) {
     stopApp()
     # q("no") est commenté ici pour tes tests, 
     # réactive-le uniquement quand tout fonctionne parfaitement.
-     q("no") 
+    # q("no") 
   })
     
     # --- 1. UNIVERSAL LOGGING ENGINE ---
@@ -553,6 +610,21 @@ server <- function(input, output, session) {
     shinyDirChoose(input, "dir_sleep", roots = roots)
     shinyDirChoose(input, "dir_participants", roots = roots)
     
+    # Mise à jour du nom du batch dès la sélection du dossier
+    observe({
+      req(input$dir_bin)
+      path <- parseDirPath(roots, input$dir_bin)
+      
+      # On vérifie d'abord que 'path' a une longueur > 0 ET n'est pas vide
+      if (length(path) > 0 && path != "" && dir.exists(path)) {
+        b_name <- basename(path)
+        current_batch_name(b_name)
+        batch_name <<- b_name # Variable globale pour les scripts source()
+        
+        cat("Batch selected:", b_name, "\n") # Optionnel
+      }
+    })
+    
     # Reactive display of selected paths
     output$path_bin <- renderText({ 
       if (is.integer(input$dir_bin)) "No folder selected" else parseDirPath(roots, input$dir_bin) 
@@ -590,7 +662,8 @@ server <- function(input, output, session) {
       showNotification("Configuration Saved!", type = "default")
     })
     
-    # --- 3. DYNAMIC FILE LISTING (For Selective Mode) ---
+    
+    # --- 3. DYNAMIC FILE LISTING ---
     observe({
       req(input$dir_bin) 
       path <- parseDirPath(roots, input$dir_bin)
@@ -598,13 +671,19 @@ server <- function(input, output, session) {
       if (is.null(path) || length(path) == 0 || path == "") return(NULL)
       
       if (dir.exists(path)) {
-        # Scan recursively for .bin files (case-insensitive)
-        files <- list.files(path, pattern = "\\.(bin|BIN)$", recursive = TRUE, full.names = FALSE)
+        full_paths <- list.files(path, pattern = "\\.(bin|BIN)$", recursive = TRUE, full.names = TRUE)
         
-        if (length(files) > 0) {
-          shinyWidgets::updatePickerInput(session, "selected_files", choices = files)
+        if (length(full_paths) > 0) {
+          file_names <- basename(full_paths)
+          
+          choices_vec <- full_paths
+          names(choices_vec) <- file_names
+          
+          shinyWidgets::updatePickerInput(session, "selected_files", 
+                                          choices = choices_vec)
         } else {
-          shinyWidgets::updatePickerInput(session, "selected_files", choices = "No .bin files found")
+          shinyWidgets::updatePickerInput(session, "selected_files", 
+                                          choices = list("No .bin files found" = ""))
         }
       }
     })
@@ -672,15 +751,21 @@ server <- function(input, output, session) {
     
     # --- 5. MAIN PIPELINE EXECUTION (CHAINED) ---
     observeEvent(input$run_full_pipeline, {
-      req(input$run_mode)
+      req(input$run_mode, current_batch_name())
       
       # 1. Capture values
       mode_selected  <- input$run_mode
-      files_selected <- input$selected_files
+      selected_filenames <- input$selected_files
+      
+      # Configuration du batch
+      b_name <- current_batch_name()
+      # Important: assign to global for scripts called via source()
+      batch_name <<- b_name 
       
       # 2. UI Reset
-      shiny::showNotification("🚀 Analysis Started", type = "message")
+      shiny::showNotification(paste("🚀 Analysis Started - Batch:", b_name), type = "message")
       session$sendCustomMessage("clear_log", list()) 
+      
       
       if(file.exists(log_file)) file.remove(log_file)
       file.create(log_file)
@@ -693,9 +778,9 @@ server <- function(input, output, session) {
         return()
       }
       
-      # 3. Persistent Progress Object (NO on.exit here!)
+      # 3. Persistent Progress Object
       prog <- shiny::Progress$new(session)
-      prog$set(message = "Executing Pipeline", value = 0)
+      prog$set(message = paste("Batch:", b_name), value = 0)
       
       # Helper function to update progress safely
       safe_prog <- function(val, det) {
@@ -710,36 +795,58 @@ server <- function(input, output, session) {
         safe_prog(1, "All steps completed")
         log_msg("\n==========================================\n🎉 PIPELINE FINISHED\n==========================================")
         
+        get_ready_ids1 <- function() {
+          # Vérifier si batch_name existe et n'est pas vide
+          b_name <- if (exists("batch_name")) batch_name else ""
+          if (b_name == "") return(character(0))
+          
+          # Chemin vers le fichier combiné spécifique au batch
+          file <- file.path("summaries", b_name, "geneactiv_combined_metrics.csv")
+          
+          if (!file.exists(file)) return(character(0))
+          
+          df <- tryCatch({
+            read.csv(file)
+          }, error = function(e) return(NULL))
+          
+          if (is.null(df) || !"subject" %in% names(df)) return(character(0))
+          
+          # Filtrer les valides (plus robuste)
+          valid_col <- if("valid_7days_activity" %in% names(df)) "valid_7days_activity" else "valid_7days_overall"
+          
+          valid_flag <- df[[valid_col]]
+          if (is.character(valid_flag)) {
+            valid_mask <- tolower(valid_flag) == "true"
+          } else {
+            valid_mask <- valid_flag == 1 | valid_flag == TRUE
+          }
+          
+          ids <- sort(unique(as.character(df$subject[valid_mask])))
+          return(ids[!is.na(ids) & ids != ""])
+        }
         # On sécurise l'appel à get_ready_ids
-        tryCatch({
-          ids <- get_ready_ids()
-          shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
-        }, error = function(e) {
-          log_msg(paste("⚠️ Note: UI update skipped -", e$message))
-        })
+         tryCatch({
+           ids <- get_ready_ids1()
+           shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
+         }, error = function(e) {
+           log_msg(paste("⚠️ Note: UI update skipped -", e$message))
+         })
         
-        shiny::showNotification("✅ Pipeline Finished", type = "message")
         prog$close() 
       }
-      
       
       step5_final <- function() {
         safe_prog(0.9, "Step 5: Finalizing summaries")
         log_msg("\n--- Step 5: Finalizing summaries ---")
         tryCatch({
-          # On utilise local = TRUE pour que les scripts voient les variables de la session
-          # mais on les exécute séquentiellement
           source("code/person_summary.R", local = TRUE)
           source("code/extract_software_sleep.R", local = TRUE)
-          
-          # C'est ici qu'on lance ton script de combinaison corrigé
           source("code/combine_geneactiv_metrics.R", local = TRUE)
           
           finish_pipeline()
+          
         }, error = function(e) {
-          #log_msg(paste("❌ Error Step 5:", e$message))
-          # Si l'erreur est "non-function", c'est souvent un problème de parenthèse
-          # ou de package mal chargé dans un des sous-scripts.
+          log_msg(paste("Step 5:", e$message))
           prog$close()
         })
       }
@@ -748,10 +855,21 @@ server <- function(input, output, session) {
         safe_prog(0.8, "Step 4: Merging data sources")
         log_msg("\n--- Step 4: Merging all data sources ---")
         tryCatch({
-          activity <- read_csv("summaries/activity_metrics.csv", show_col_types = FALSE)
-          steps <- read_csv("summaries/step_metrics.csv", show_col_types = FALSE)
-          write_csv(left_join(steps, activity, by = c("subject", "calendar_date")), "summaries/activity_metrics.csv")
+          # Updated paths to read from the batch subfolder
+          batch_summary_dir <- file.path("summaries", b_name)
+          activity <- suppressWarnings(
+            read_csv(file.path(batch_summary_dir, "activity_metrics.csv"), show_col_types = FALSE)
+          )
+          
+          steps <- suppressWarnings(
+            read_csv(file.path(batch_summary_dir, "step_metrics.csv"), show_col_types = FALSE)
+          )
+          
+          write_csv(left_join(steps, activity, by = c("subject", "calendar_date")), 
+                    file.path(batch_summary_dir, "activity_metrics.csv"))
+          
           step5_final()
+          
         }, error = function(e) {
           log_msg(paste("❌ Error Step 4:", e$message))
           prog$close()
@@ -760,20 +878,28 @@ server <- function(input, output, session) {
       
       step3_extraction <- function() {
         safe_prog(0.6, "Step 3: Extracting metrics")
-        run_step_async(current_r_script_exe, "code/extract_step_metrics.R", "Step Metrics", on_success = function() {
-          run_step_async(current_r_script_exe, "code/extract_activity_metrics.R", "Activity Metrics", 
-                         on_success = step4_integration, 
-                         check_fn = function() file.exists("summaries/activity_metrics.csv"))
-        }, check_fn = function() file.exists("summaries/step_metrics.csv"))
+        
+        # Pass --batch argument to R scripts
+        r_args_steps <- c("code/extract_step_metrics.R", "--batch", b_name)
+        r_args_activity <- c("code/extract_activity_metrics.R", "--batch", b_name)
+        
+        run_step_async(current_r_script_exe, r_args_steps, "Step Metrics", on_success = function() {
+          run_step_async(current_r_script_exe, r_args_activity, "Activity Metrics", 
+                         on_success = step4_integration)
+        })
       }
       
       step2_python <- function() {
-        safe_prog(0.4, "Step 2: Python Stepcount")
+        prog$set(0.4, detail = "Python Stepcount")
         py_script <- normalizePath("code/get_steps.py", mustWork = FALSE)
-        args <- c(py_script) 
         
-        if (mode_selected == "selective" && !is.null(files_selected)) {
-          ids <- gsub("\\.(bin|BIN)$", "", basename(files_selected))
+        # On ajoute le nom du batch aux arguments !
+        args <- c(py_script, "--batch", b_name) 
+        
+        if (mode_selected == "selective" && !is.null(input$selected_files)) {
+          # On prend les 7 premiers caractères pour l'ID
+          ids <- substr(basename(input$selected_files), 1, 7)
+          ids <- unique(ids)
           args <- c(args, "--ids", paste(ids, collapse=","))
         }
         
@@ -782,9 +908,10 @@ server <- function(input, output, session) {
       
       # --- 5. KICK-OFF ---
       safe_prog(0.1, "Step 1: GGIR Analysis")
-      run_step_async(current_r_script_exe, c("code/run_GGIR.R"), "GGIR Analysis", 
-                     on_success = step2_python, 
-                     check_fn = function() dir.exists("GGIR"))
+      
+      # Pass --batch to GGIR script as well
+      run_step_async(current_r_script_exe, c("code/run_GGIR.R", "--batch", b_name), "GGIR Analysis", 
+                     on_success = step2_python)
       
     })
         
@@ -812,13 +939,91 @@ server <- function(input, output, session) {
     
     # --- 6. REPORT GENERATION ---
     
-    # Trigger when the "GENERATE SELECTED REPORTS" button is clicked
+    # 1. Affichage du batch actif dans l'UI
+    output$report_batch_display <- renderUI({
+      b <- if (exists("batch_name") && batch_name != "") batch_name else "None selected"
+      helpText(paste("Current Batch:", b))
+    })
+    
+    # 2. Fonction get_ready_ids MISE À JOUR pour cibler le dossier du batch
+    get_ready_ids <- function() {
+      # Vérifier si batch_name existe et n'est pas vide
+      b_name <- if (exists("batch_name")) batch_name else ""
+      if (b_name == "") return(character(0))
+      
+      # Chemin vers le fichier combiné spécifique au batch
+      file <- file.path("summaries", b_name, "geneactiv_combined_metrics.csv")
+      
+      if (!file.exists(file)) return(character(0))
+      
+      df <- tryCatch({
+        read.csv(file)
+      }, error = function(e) return(NULL))
+      
+      if (is.null(df) || !"subject" %in% names(df)) return(character(0))
+      
+      # Filtrer les valides (plus robuste)
+      valid_col <- if("valid_7days_activity" %in% names(df)) "valid_7days_activity" else "valid_7days_overall"
+      
+      valid_flag <- df[[valid_col]]
+      if (is.character(valid_flag)) {
+        valid_mask <- tolower(valid_flag) == "true"
+      } else {
+        valid_mask <- valid_flag == 1 | valid_flag == TRUE
+      }
+      
+      ids <- sort(unique(as.character(df$subject[valid_mask])))
+      return(ids[!is.na(ids) & ids != ""])
+    }
+    
+    # 3. Rafraîchissement automatique quand le batch change
+    observe({
+      # On rend cette fonction dépendante de l'input du batch (ou du nom du batch)
+      # pour qu'elle se déclenche dès que l'utilisateur sélectionne un batch
+      ids <- get_ready_ids()
+      shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
+    })
+    
+    # 4. Rafraîchissement manuel
+    observeEvent(input$refresh_report_list, {
+      ids <- get_ready_ids()
+      shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
+      
+      if(length(ids) > 0) {
+        showNotification(paste(length(ids), "participants ready for reports."), type = "message")
+      } else {
+        showNotification("No ready participants found for this batch.", type = "warning")
+      }
+    })
+    
+    # --- Helper pour logger dans la console de rapport ---
+    report_log <- function(msg, type = "info") {
+      color <- switch(type, "error" = "#ff7675", "warning" = "#ffeaa7", "#55efc4")
+      timestamp <- format(Sys.time(), "%H:%M:%S")
+      new_line <- sprintf("<div style='color:%s;'>[%s] %s</div>", color, timestamp, msg)
+      insertUI(selector = "#report_log_console", where = "beforeEnd",
+               ui = HTML(new_line), immediate = TRUE)
+      # Auto-scroll vers le bas via JS
+      runjs("var objDiv = document.getElementById('report_log_console'); objDiv.scrollTop = objDiv.scrollHeight;")
+    }
+    
+    # Effacer la console
+    observeEvent(input$clear_report_logs, {
+      shinyjs::html("report_log_console", "")
+    })
+    
+    # --- 6. REPORT GENERATION AMÉLIORÉE ---
     observeEvent(input$gen_report_multi, {
-      req(input$report_selected_ids) # Ensure at least one ID is selected
-      req(input$report_languages)    # Ensure at least one language is checked
+      req(input$report_selected_ids, input$report_languages)
       
       selected_ids <- input$report_selected_ids
       selected_langs <- input$report_languages
+      
+      # Flag pour suivre si TOUT s'est bien passé
+      any_error <- FALSE
+      
+      report_log("------------------------------------------", "info")
+      report_log(paste("🚀 Starting generation for", length(selected_ids), "participants..."), "info")
       
       withProgress(message = 'Generating Reports...', value = 0, {
         total_steps <- length(selected_ids) * length(selected_langs)
@@ -827,129 +1032,86 @@ server <- function(input, output, session) {
         for (current_id in selected_ids) {
           for (lang in selected_langs) {
             step_count <- step_count + 1
+            setProgress(step_count / total_steps, detail = paste("ID:", current_id))
             
-            # Update the progress bar details
-            setProgress(step_count / total_steps, 
-                        detail = paste("Processing:", current_id, "(", toupper(lang), ")"))
-            
-            # 1. Define the Global variable 'target_id' for the sub-scripts to use
             target_id <<- current_id 
-            
-            # 2. Path to the specific language script
             script_path <- paste0("code/generate_reports_", lang, ".R")
             
             if(file.exists(script_path)) {
               tryCatch({
-                # Run the script in the local environment
+                # On capture les éventuels messages de sortie du script R
                 source(script_path, local = TRUE)
+                report_log(paste("✅ Success:", current_id, "[", lang, "]"), "success")
               }, error = function(e) {
-                message("Error in ", lang, " report for ", current_id, ": ", e$message)
+                any_error <<- TRUE
+                report_log(paste("❌ Error:", current_id, "[", lang, "]:", e$message), "error")
               })
             } else {
-              message("Script not found: ", script_path)
+              any_error <<- TRUE
+              report_log(paste("⚠️ Missing script:", script_path), "warning")
             }
           }
         }
       })
-      showNotification("✅ Selected reports have been generated!", type = "default")
+      
+      if(!any_error) {
+        showNotification("✅ All reports generated successfully!", type = "message")
+      } else {
+        showNotification("⚠️ Generation finished with some errors. Check the log below.", type = "warning", duration = 10)
+      }
     })
+    
     
     # Logique pour fusionner les rapports
     observeEvent(input$merge_selected_reports, {
-      req(input$report_languages) # On vérifie qu'au moins une langue est cochée
+      req(input$report_languages)
       
       selected_langs <- input$report_languages
+      any_merge_error <- FALSE
+      
+      report_log("------------------------------------------", "info")
+      report_log("🔗 Starting PDF Merging Process...", "info")
       
       withProgress(message = 'Merging Reports...', value = 0, {
         
         for (lang in selected_langs) {
-          # Mise à jour de la barre de progression
+          # UI Feedback
           setProgress(value = (which(selected_langs == lang) / length(selected_langs)), 
                       detail = paste("Merging:", toupper(lang)))
+          
+          report_log(paste("⏳ Merging all files for language:", toupper(lang)))
           
           merge_script_path <- paste0("code/merge_reports_", lang, ".R")
           
           if(file.exists(merge_script_path)) {
             tryCatch({
+              # Exécution du script de fusion
               source(merge_script_path, local = TRUE)
-              showNotification(paste("✅ Combined Report", toupper(lang), "created!"), type = "default")
+              
+              report_log(paste("✅ Combined Report", toupper(lang), "successfully created!"), "success")
             }, error = function(e) {
-              showNotification(paste("❌ Error merging", lang, ":", e$message), type = "error")
+              any_merge_error <<- TRUE
+              report_log(paste("❌ Error merging", lang, ":", e$message), "error")
             })
           } else {
-            showNotification(paste("⚠️ Script missing:", merge_script_path), type = "warning")
+            any_merge_error <<- TRUE
+            report_log(paste("⚠️ Script missing:", merge_script_path), "warning")
           }
+          
+          # Petit délai pour laisser l'UI respirer et afficher le log
+          Sys.sleep(0.2)
         }
       })
+      
+      # Notification finale basée sur le succès réel
+      if(!any_merge_error) {
+        showNotification("✅ All merges completed!", type = "message")
+      } else {
+        showNotification("⚠️ Some merges failed. Check the report log.", type = "warning")
+      }
     })
     
     # --- 7. UTILS & UPDATES ---
-    # get_ready_ids <- function() {
-    #   file <- file.path("summaries", "geneactiv_combined_metrics.csv")
-    #   if (!file.exists(file)) return(character(0))
-    #   df <- read.csv(file)
-    #   valid_flag <- if (is.logical(df$valid_7days_activity)) df$valid_7days_activity else df$valid_7days_activity == 1
-    #   return(sort(unique(as.character(df$subject[valid_flag]))))
-    # }
-    
-    # On crée une fonction réutilisable pour scanner les dossiers
-    get_ready_ids <- function() {
-      
-      file <- file.path("summaries", "geneactiv_combined_metrics.csv")
-      
-      # 1. Check existence
-      if (!file.exists(file)) return(character(0))
-      
-      # 2. Read safely
-      df <- tryCatch({
-        read.csv(file)
-      }, error = function(e) {
-        return(NULL)
-      })
-      
-      if (is.null(df)) return(character(0))
-      
-      # 3. Check required columns
-      required_cols <- c("subject", "valid_7days_activity")
-      
-      if (!all(required_cols %in% names(df))) return(character(0))
-      
-      # 4. Normalize valid column (robust)
-      valid_flag <- df$valid_7days_activity
-      
-      valid_flag <- if (is.logical(valid_flag)) {
-        valid_flag
-      } else if (is.numeric(valid_flag)) {
-        valid_flag == 1
-      } else {
-        tolower(as.character(valid_flag)) == "true"
-      }
-      
-      # 5. Filter valid participants
-      df_valid <- df[valid_flag, ]
-      
-      # 6. Extract unique IDs
-      ids <- unique(df_valid$subject)
-      
-      # 7. Clean
-      ids <- as.character(ids)
-      ids <- ids[!is.na(ids) & ids != ""]
-      
-      # 8. Sort (UX)
-      ids <- sort(ids)
-      
-      return(ids)
-    }
-    
-    observeEvent(input$refresh_report_list, {
-      shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = get_ready_ids())
-    })
-    
-    # observeEvent(input$btn_update, {
-    #   withProgress(message = 'Updating Scripts...', value = 0, {
-    #     check_and_update(update_roots = FALSE, update_code = TRUE, shiny_progress = setProgress)
-    #   })
-    # })
     
     observeEvent(input$btn_update, {
       withProgress(message = 'Updating Analysis Scripts...', value = 0, {
@@ -962,28 +1124,6 @@ server <- function(input, output, session) {
         
         if (success) showNotification("Scripts updated successfully!", type = "default")
       })
-    })
-    
-    # --- AUTO-REFRESH LIST ON START (ADAPTED) ---
-    # This ensures the IDs are loaded immediately when the session opens
-    observe({
-      ids <- get_ready_ids()
-      if (length(ids) > 0) {
-        shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
-      }
-    })
-    
-    # 1. Mise à jour au clic sur le bouton "Refresh List"
-    observeEvent(input$refresh_report_list, {
-      ids <- get_ready_ids()
-      
-      if (length(ids) > 0) {
-        shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = ids)
-        showNotification("List updated: Participants found.", type = "default")
-      } else {
-        shinyWidgets::updatePickerInput(session, "report_selected_ids", choices = character(0))
-        showNotification("No completed analyses found in 'summaries/'.", type = "warning")
-      }
     })
     
     # --- SYSTEM CHECK LOGIC (ADAPTED) ---

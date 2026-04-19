@@ -14,17 +14,26 @@ if (!exists("target_id")) {
   stop("target_id is missing. This script must be run from the Shiny App.")
 }
 
+b_name <- if (exists("batch_name")) batch_name else ""
+
 cfg <- yaml::read_yaml("config.yml")
 
 # Chemins basés sur config.yml
-path_data  <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
+if (b_name != "") {
+  path_data <- file.path(cfg$paths$summaries, b_name, "geneactiv_combined_metrics.csv")
+  report_out <- file.path(cfg$paths$reports, b_name, "reports_Hindi")
+} else {
+  path_data <- file.path(cfg$paths$summaries, "geneactiv_combined_metrics.csv")
+  report_out <- file.path(cfg$paths$reports, "reports_Hindi")
+}
+
 path_demo <- cfg$paths$participant_files$hi
 path_img   <- "resources/images"
 path_logo1 <- file.path(path_img, "logo1.png")
 path_logo2 <- file.path(path_img, "logo2.png")
 
 # Dossier de sortie automatique
-report_out <- file.path(cfg$paths$reports, "reports_Hindi")
+#report_out <- file.path(cfg$paths$reports, "reports_Hindi")
 if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
 
 
@@ -44,7 +53,7 @@ fp_subtitle <- fp_text(font.size = 14, bold = TRUE, color = col_primary)
 # 1.a DATA PREPARATION
 # =====================================================
 # Clean TARGET_ID
-clean_target_id <- substr(trimws(target_id), 1, 6)
+clean_target_id <- substr(trimws(target_id), 1, 7)
 
 # --- DATA PREPARATION CIBLÉE ---
 data_metrics <- read_csv(path_data, show_col_types = FALSE) %>%
@@ -59,11 +68,12 @@ if(grepl("\\.xlsx$", path_demo)) {
 }
 
 data_demo <- data_demo %>% 
-  mutate(intnl_test_id = as.character(intnl_test_id)) %>%
-  filter(intnl_test_id == clean_target_id) 
+  mutate(did = as.character(did)) %>%
+  filter(did == clean_target_id) 
 
 data_full <- data_metrics %>%
-  left_join(data_demo, by = c("subject" = "intnl_test_id"))
+  select(-age) %>%
+  left_join(data_demo, by = c("subject" = "did"))
 
 # =====================================================
 # 2. UTILITY FUNCTIONS
@@ -147,11 +157,13 @@ generate_officer_report <- function(pid, data_full) {
             "लिंग:",
             "अध्ययन की अवधि:"),
     Val = c(
-      ifelse(is.na(person$hhp_id[1]), "-", as.character(person$hhp_id[1])),
+      ifelse(is.na(person$HHID[1]), "-", as.character(person$HHID[1])),
       as.character(person$subject[1]),
       ifelse(is.na(person$ceb_code[1]), "-", as.character(person$ceb_code[1])),
-      ifelse(is.na(person$part_name[1]), "N/A", as.character(person$part_name[1])), # Le nom vient du merge
-      as.character(person$age[1]),
+      ifelse(is.na(person$Name_of_Participant[1]), "N/A", as.character(person$Name_of_Participant[1])), # Le nom vient du merge
+     # as.character(person$AGE[1]),
+     # Dans info_df
+      Age = ifelse(is.na(person$AGE[1]), "N/A", as.character(person$AGE[1])),
       case_when(
         as.character(person$sex[1]) == "Male"   ~ "पुरुष",
         as.character(person$sex[1]) == "Female" ~ "महिला",
@@ -235,11 +247,24 @@ generate_officer_report <- function(pid, data_full) {
 
 
   # --- CHARTS ---
+  # plot_data_steps <- data.frame(d = paste("दिन", 1:7), s = steps_vec) %>%
+  #   filter(!is.na(s) & s > 0) 
+  # 
+  # p1 <- ggplot(plot_data_steps, aes(x = d, y = s)) +
+  #   geom_col(fill = col_secondary, color = col_primary, width = 0.7) +
+  
   p1 <- ggplot(data.frame(d = paste("दिन", 1:7), s = steps_vec), aes(x = d, y = s)) +
     geom_col(fill = col_secondary, color = col_primary, width = 0.7) +
-    theme_minimal() + labs(x = "अध्ययन का दिन", y =  "दैनिक कदमs") +
+    theme_minimal() + labs(x = "अध्ययन का दिन", y =  "दैनिक कदम") +
     theme(panel.border = element_rect(color = col_primary, fill = NA), axis.title = element_text(face = "bold", color = col_primary))
 
+ 
+  # plot_data_sleep <- data.frame(n = paste("रात", 1:7), s = sleep_vec) %>%
+  #   filter(!is.na(s) & s > 0) 
+  # 
+  # p2 <- ggplot(plot_data_sleep, aes(x = n, y = s)) +
+  #   geom_col(fill = col_primary, color = col_primary, width = 0.7) +
+  
   p2 <- ggplot(data.frame(n = paste("रात", 1:7), s = sleep_vec), aes(x = n, y = s)) +
     geom_col(fill = col_primary, color = col_primary, width = 0.7) +
     theme_minimal() + labs(x = "अध्ययन की रात", y = "रात की नींद ") +
@@ -341,8 +366,8 @@ generate_officer_report <- function(pid, data_full) {
     # Final Research Note
     body_add_fpar(fpar(ftext("नोट: गतिविधि और नींद की यह जानकारी शुरुआती है और केवल शोध के उद्देश्य से है। यह कोई क्लिनिकल जांच (डॉक्टरी रिपोर्ट) नहीं है। यदि आप और अधिक जानकारी चाहते हैं, तो कृपया हमसे संपर्क करें।", prop = fp_italic), fp_p = fp_par(text.align = "center")))
 
-  report_out <- file.path(cfg$paths$reports, "reports_Hindi")
-  if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
+  #report_out <- file.path(cfg$paths$reports, "reports_Hindi")
+  #if(!dir.exists(report_out)) dir.create(report_out, recursive = TRUE)
   
   # --- SAVE AND EXPORT ---
   docx_path <- file.path(report_out, paste0("Report_Hindi_", pid, ".docx"))
