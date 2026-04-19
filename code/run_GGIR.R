@@ -47,29 +47,110 @@ if (dir.exists(path_to_ms)) {
   if (file.exists(file_check)) unlink(file_check)
 }
 
-# 3. SELECTIVE PROCESSING LOGIC (Unified)
+# # 3. SELECTIVE PROCESSING LOGIC (Unified)
+# final_data_dir <- data_dir
+# is_selective <- FALSE
+# temp_subset_dir <- file.path(tempdir(), "ggir_subset") # Stockage du chemin pour nettoyage
+# 
+# if (exists("selected_filenames") && !is.null(selected_filenames) && length(selected_filenames) > 0) {
+#   message("--- Selective Mode Active ---")
+#   
+#   if(dir.exists(temp_subset_dir)) unlink(temp_subset_dir, recursive = TRUE)
+#   dir.create(temp_subset_dir, recursive = TRUE)
+#   
+#   files_to_copy <- file.path(data_dir, selected_filenames)
+#   existing_files <- files_to_copy[file.exists(files_to_copy)]
+#   
+#   if (length(existing_files) > 0) {
+#     success_copy <- file.copy(existing_files, temp_subset_dir)
+#     if(all(success_copy)) {
+#       final_data_dir <- temp_subset_dir
+#       is_selective <- TRUE
+#       message(paste("Files successfully copied to temp folder:", length(existing_files), "files."))
+#     }
+#   } 
+# } 
+
+
+# =============================
+# 3. SELECTIVE PROCESSING LOGIC
+# =============================
+
+# --- DYNAMIC PROJECT ROOT DETECTION ---
+config_path <- "config.yml"
+if (!file.exists(config_path)) config_path <- "../config.yml"
+
+if (!file.exists(config_path)) {
+  stop("FATAL: config.yml not found. Check project structure.")
+}
+
+# Define project root based on config file location
+base_project <- dirname(normalizePath(config_path, winslash = "/"))
+
+# --- DYNAMIC PYTHON LOCATION ---
+path_options <- c(
+  file.path(base_project, "resources/python_env/python.exe"),
+  file.path(base_project, "resources/python_env/Scripts/python.exe"),
+  file.path(base_project, "resources/python_env/bin/python.exe")
+)
+
+python_path <- NULL
+for (opt in path_options) {
+  if (file.exists(opt)) {
+    python_path <- normalizePath(opt, winslash = "/", mustWork = FALSE)
+    break
+  }
+}
+
+if (is.null(python_path)) {
+  stop("FATAL: python.exe not found in resources/python_env/")
+}
+
+# Set environment
+Sys.setenv(PYTHON = python_path)
+options(python_cmd = python_path)
+message("--- SUCCESS: Portable Mode Active. Using: ", python_path)
+
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+parser <- ArgumentParser()
+parser$add_argument("--batch", type="character", help="Batch name")
+parser$add_argument("--files", type="character", help="Comma separated list of files")
+args <- parser$parse_args()
+
 final_data_dir <- data_dir
 is_selective <- FALSE
-temp_subset_dir <- file.path(tempdir(), "ggir_subset") # Stockage du chemin pour nettoyage
+#temp_subset_dir <- file.path(tempdir(), paste0("ggir_subset_", args$batch))
+temp_subset_dir <- file.path(tempdir(), args$batch)
 
-if (exists("selected_filenames") && !is.null(selected_filenames) && length(selected_filenames) > 0) {
-  message("--- Selective Mode Active ---")
+# On vérifie si des fichiers spécifiques ont été passés en argument
+if (!is.null(args$files) && args$files != "") {
+  selected_files_list <- unlist(strsplit(args$files, ","))
   
   if(dir.exists(temp_subset_dir)) unlink(temp_subset_dir, recursive = TRUE)
   dir.create(temp_subset_dir, recursive = TRUE)
   
-  files_to_copy <- file.path(data_dir, selected_filenames)
-  existing_files <- files_to_copy[file.exists(files_to_copy)]
+  # 1. Chemins sources (complets)
+  files_to_copy_src <- file.path(data_dir, selected_files_list)
+  # 2. Chemins destinations (dans le temp)
+  files_to_copy_dest <- file.path(temp_subset_dir, selected_files_list)
   
-  if (length(existing_files) > 0) {
-    success_copy <- file.copy(existing_files, temp_subset_dir)
-    if(all(success_copy)) {
-      final_data_dir <- temp_subset_dir
-      is_selective <- TRUE
-      message(paste("Files successfully copied to temp folder:", length(existing_files), "files."))
-    }
-  } 
-} 
+  existing_indices <- file.exists(files_to_copy_src)
+  
+  if (any(existing_indices)) {
+    # Créer les sous-dossiers dans le temp si nécessaire
+    unique_dirs <- unique(dirname(files_to_copy_dest[existing_indices]))
+    lapply(unique_dirs, dir.create, recursive = TRUE, showWarnings = FALSE)
+    
+    # Copier
+    file.copy(files_to_copy_src[existing_indices], files_to_copy_dest[existing_indices])
+    
+    final_data_dir <- temp_subset_dir
+    is_selective <- TRUE
+    message(paste("✅ Copied", sum(existing_indices), "files to temp folder."))
+  } else {
+    message("⚠️ Warning: No selected files found. Check: ", files_to_copy_src[1])
+  }
+}
 
 writeLines(basename(final_data_dir), "current_ggir_folder.txt")
 
