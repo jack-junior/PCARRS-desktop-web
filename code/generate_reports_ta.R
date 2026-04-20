@@ -162,7 +162,7 @@ generate_officer_report <- function(pid, data_full) {
       ifelse(is.na(person$HHID[1]), "-", as.character(person$HHID[1])),
       as.character(person$subject[1]),
       ifelse(is.na(person$ceb_code[1]), "-", as.character(person$ceb_code[1])),
-      ifelse(is.na(person$Name_of_Participant[1]), "N/A", as.character(person$Name_of_Participant[1])),
+      ifelse(is.na(person$`Name of Participant`[1]), "N/A", as.character(person$Name_of_Participant[1])),
       #as.character(person$AGE[1]),
       # Dans info_df
       Age = ifelse(is.na(person$AGE[1]), "N/A", as.character(person$AGE[1])),
