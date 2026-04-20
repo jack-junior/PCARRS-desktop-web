@@ -650,7 +650,7 @@ server <- function(input, output, session) {
         sleep_data = sleep_path,
         participant_folder = part_dir,
         participant_files = list(
-          info = file.path(part_dir, "participants_info.xlsx"),
+          info = file.path(part_dir, "participants_info.xlsx")
           #ta = file.path(part_dir, "participants_ta.xlsx"),
           #hi = file.path(part_dir, "participants_hi.xlsx")
         ),
