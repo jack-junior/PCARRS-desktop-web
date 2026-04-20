@@ -2,7 +2,7 @@ import subprocess
 import yaml
 from pathlib import Path
 import sys
-import argparse # To handle IDs passed from R
+import argparse 
 import ssl
 import os
 
@@ -13,10 +13,28 @@ if (not os.environ.get('PYTHONHTTPSVERIFY', '') and
 # -----------------------------
 
 # ------------------------------------
-# 1. LOAD CONFIGURATION
+# 1. DYNAMIQUE : CHEMINS ET JAVA PORTABLE
 # ------------------------------------
 script_dir = Path(__file__).resolve().parent 
 project_root = script_dir.parent
+
+# --- INJECTION JAVA PORTABLE ---
+# On cible resources/java_env/bin
+java_bin_path = project_root / "resources" / "java_env" / "bin"
+
+if java_bin_path.exists():
+    # On ajoute le chemin de Java au DEBUT du PATH pour cette session
+    os.environ["PATH"] = str(java_bin_path) + os.pathsep + os.environ["PATH"]
+    # On définit aussi JAVA_HOME pour la compatibilité maximale
+    os.environ["JAVA_HOME"] = str(java_bin_path.parent)
+    print(f"--- SUCCESS: Portable Java Active: {java_bin_path}")
+else:
+    print("--- WARNING: Portable Java not found in resources/java_env/bin")
+    print("--- Using system default Java (this might fail if Java is not installed)")
+
+# ------------------------------------
+# 2. LOAD CONFIGURATION
+# ------------------------------------
 config_path = project_root / "config.yml"
 
 if not config_path.exists():
@@ -27,48 +45,41 @@ with open(config_path, "r", encoding="utf-8") as f:
     cfg = yaml.safe_load(f)
 
 # ------------------------------------
-# 2. SETTINGS & ARGUMENTS
+# 3. SETTINGS & ARGUMENTS
 # ------------------------------------
-# Check if R passed specific IDs or a Batch Name as arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--ids', type=str, help='Comma separated list of IDs')
-parser.add_argument('--batch', type=str, help='Batch name for folder organization') # Added Batch Arg
+parser.add_argument('--batch', type=str, help='Batch name for folder organization')
 args = parser.parse_args()
 
 target_ids = []
 if args.ids:
     target_ids = [i.strip() for i in args.ids.split(',') if i.strip()]
 
+# Résolution des chemins depuis le config.yml
 BIN_ROOT = Path(cfg['paths']['raw_bin'])
 
-# Update OUTPUT_ROOT to include batch subfolder if provided
 if args.batch:
     OUTPUT_ROOT = project_root / cfg['paths']['summaries'] / args.batch
 else:
     OUTPUT_ROOT = project_root / cfg['paths']['summaries']
-    
-#OUTPUT_ROOT = project_root / "summaries"
 
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-STEPCOUNT_EXE = f'"{sys.executable}" -m stepcount.stepcount'
 
 # ------------------------------------
 # FUNCTIONS
 # ------------------------------------
 
 def find_bin_files(root: Path, filter_ids=None):
-    """Find files. If filter_ids is provided, only keep matching filenames."""
+    """Trouver les fichiers .bin avec filtrage optionnel par ID."""
     all_files = sorted(root.rglob("*.bin"))
     if not filter_ids:
         return all_files
-    
-    # Matches if any target_id (7 digits) is at the start of the filename
     return [f for f in all_files if any(f.name.startswith(id_match) for id_match in filter_ids)]
 
 def has_already_been_processed(bin_file: Path, output_root: Path) -> bool:
     file_stem = bin_file.stem
     per_file_output_dir = output_root / file_stem
-    
     done_flag = per_file_output_dir / "DONE.txt"
     return done_flag.exists()
 
@@ -79,12 +90,14 @@ def run_stepcount_on_file(bin_file: Path, output_root: Path):
 
     print(f"--- Processing: {bin_file.name} ---", flush=True)
     
+    # Commande stepcount lancée via l'exécutable Python courant
     cmd = [
         sys.executable, "-m", "stepcount.stepcount", 
         str(bin_file), 
         "-o", str(per_file_output_dir)
     ]
     
+    # subprocess.run héritera de l'os.environ["PATH"] modifié plus haut
     result = subprocess.run(
         cmd,
         stdout=sys.stdout,
@@ -96,12 +109,9 @@ def run_stepcount_on_file(bin_file: Path, output_root: Path):
         print(f"RESULT: FAILED for {bin_file.name}", flush=True)
         return False
 
-    # SUCCESS
     print(f"RESULT: SUCCESS for {bin_file.name}", flush=True)
-    
     done_flag = per_file_output_dir / "DONE.txt"
     done_flag.write_text("completed")
-    
     return True
 
 # ------------------------------------
@@ -122,8 +132,6 @@ def main():
 
     print(f"PYTHON START: Batch [{args.batch if args.batch else 'None'}]")
     print(f"Target files to check: {total_files}")
-    if target_ids:
-        print(f"Filtering for IDs: {target_ids}")
 
     for bin_file in bin_files:
         print(f"Checking: {bin_file.name}", flush=True)
