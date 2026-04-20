@@ -27,7 +27,7 @@ if (b_name != "") {
   report_out <- file.path(cfg$paths$reports, "reports_Tamil")
 }
 
-path_demo <- cfg$paths$participant_files$ta
+path_demo <- cfg$paths$participant_files$info
 path_img   <- "resources/images"
 path_logo1 <- file.path(path_img, "logo1.png")
 path_logo2 <- file.path(path_img, "mdrf-logo.png")
