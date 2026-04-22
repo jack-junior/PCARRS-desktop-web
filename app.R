@@ -469,7 +469,7 @@ ui <- page_navbar(
                           tags$b("© 2026 "),
                           tags$a(href = "https://ccdcindia.org/", target = "_blank", 
                                  "Centre for Chronic Disease Control", 
-                                 style = "text-decoration: none; color: #2c3e50;"),
+                                 style = "text-decoration: none; color: #2980b9;"),
                           " | All rights reserved."
                 )
             ),
@@ -478,7 +478,7 @@ ui <- page_navbar(
                           "Powered by ", 
                           tags$b(style = "color: #2980b9;", "Gayasatori"), 
                           " & ", 
-                          tags$b(style = "color: #2980b9;", "Sangenitorium")
+                          tags$b(style = "color: #2980b9;", "Sangenium")
                 )
             )
         )
